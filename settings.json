@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__atlassian__getAccessibleAtlassianResources",
+      "mcp__atlassian__searchJiraIssuesUsingJql",
+      "mcp__atlassian__getJiraIssue",
+      "Bash(git config:*)",
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(date)",
+      "Bash(find $QH_KNOWLEDGE/**)",
+      "Bash(find $QH_SCRIPTS/**)",
+      "Read($QH_KNOWLEDGE/**)",
+      "Read($QH_SCRIPTS/**)",
+      "Read($CLAUDE_DOTFILES/**)"
+    ],
+    "additionalDirectories": []
+  }
+}

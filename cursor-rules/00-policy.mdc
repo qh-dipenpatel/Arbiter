@@ -1,0 +1,159 @@
+---
+description: Universal policy for the data integration AI system. PHI rules, git guardrails, vault structure, doc conventions. Apply to all work in this vault.
+globs: "**/*"
+alwaysApply: true
+---
+
+# Universal Policy
+
+This file applies to all AI tools working in this vault.
+Source of truth lives in `claude-dotfiles/cursor-rules/` — do not edit the deployed copy.
+
+---
+
+## Identity
+
+- **User:** [YOUR NAME], [YOUR TITLE], [YOUR COMPANY]
+- **Domain:** Health AI. PHI/PII rules apply at all times, no exceptions.
+- **Vault:** `$QH_KNOWLEDGE` — Obsidian vault, local only, not git tracked
+
+---
+
+## PHI / PII — Non-Negotiable
+
+- PHI (patient identifiers, MRNs, DOB, health records) **never** enters: vault files, logs, commits, test data, comments, or any AI conversation
+- If PHI would be exposed by any proposed action: **stop, flag immediately, do not proceed**
+- Writing SQL *against* PHI tables is fine — the line is results entering the AI context
+
+---
+
+## Git Guardrails
+
+- **Never commit without explicit user approval** — say what you're committing and wait for "yes"
+- **Never force push, reset --hard, or use --no-verify** without explicit instruction
+- **Company code repos are READ ONLY** — no edits, no commits, no branches
+  - To propose changes: copy relevant files to a temp folder, make changes there, present the diff, user applies manually
+- Commit messages: `session: YYYY-MM-DD [brief description]` for vault, `chore(skills): [what and why]` for dotfiles
+
+---
+
+## External Systems: Draft Only
+
+| System | Rule |
+|---|---|
+| Slack | Draft only. User sends. |
+| Jira | Draft only. User posts (or explicit "post it" via MCP). |
+| Git | Never commit without explicit approval |
+| Confluence | Read only |
+
+---
+
+## Decision Framework
+
+Before any nontrivial action, state:
+- **WHAT** — what is being decided or done
+- **HOW** — the specific approach
+- **WHY** — the reasoning
+- **WHY NOT** — alternatives considered and rejected
+- **ASSUMPTION** — anything assumed that needs validation
+
+Skip for purely mechanical steps with no real alternatives.
+
+---
+
+## Vault Structure
+
+```
+QH_KNOWLEDGE/
+├── 00-landing/               <- rough notes, session captures
+├── 01-system-map/
+│   ├── clients/              <- CLIENT-NAME.md (one file per client)
+│   ├── pipelines/            <- PIPELINE-NAME.md
+│   ├── architecture/         <- system-level architecture docs
+│   ├── data-model/           <- schemas, layer definitions
+│   └── platform-learning/    <- platform concepts added in context
+├── 02-tickets/
+│   └── {KEY}/                <- one folder per Jira ticket
+├── 03-knowledge-base/
+│   ├── decisions/            <- YYYY-MM-DD-topic.md
+│   ├── learnings/            <- YYYY-MM-DD-topic.md
+│   └── patterns/             <- YYYY-MM-DD-topic.md
+├── 04-education/             <- reference material, course notes
+├── 05-claude-conversations/  <- exported conversation logs
+├── 06-meetings-summaries/    <- meeting transcripts ($QH_MEETINGS points here)
+├── 07-workflows/             <- process docs, runbooks, SOPs
+└── memory/                   <- Claude feedback memories
+```
+
+---
+
+## Document Conventions
+
+- **Naming:** `YYYY-MM-DD-topic.md` for decisions/learnings/patterns. Ticket folders: `{KEY}/`.
+- **Frontmatter:** YAML tags on every ticket file: `tags: [status/in-progress, client/name, type/task]`
+- **Wiki links:** Use Obsidian `[[filename]]` syntax to link related docs. Every doc should link to related system map entries and tickets.
+- **Rough notes:** Go to `00-landing/` first. Promote to appropriate folder when signal is clear.
+- **No PHI** — ever, in any vault file under any circumstances.
+
+---
+
+## Session Log
+
+Append to `00-landing/session-log.md` at the end of every session:
+```markdown
+## YYYY-MM-DD — [brief title]
+Done: [what was completed]
+Decided: [key decisions and WHY]
+Pending: [what's next — specific enough to pick up cold]
+Notes: [anything worth remembering]
+```
+Maximum 20 entries — remove oldest when adding would exceed limit.
+
+---
+
+## Communication Standards
+
+### Two voices: always label which one
+
+**Client voice:** business language, outcome focused, no jargon. No internal tool names, pipeline internals, or PHI.
+
+**Internal / Data team voice:** technical, precise, direct. Reference tables, schemas, ticket numbers by name.
+
+### Minto Pyramid: answer first, always
+Lead with the conclusion. Supporting detail follows. Never build to the answer.
+
+### Made to Stick (SUCCESs)
+Simple. Concrete (specific names, numbers, dates). No filler phrases. Evidence over assertion. Reader-focused.
+
+### Jira comment format
+```
+CONTEXT
+[why this is relevant now]
+
+WHAT WAS DONE
+[specific actions taken — first person, past tense]
+
+WHAT'S NEXT
+[who owns it, what action, by when]
+
+OPEN ITEMS
+[@person — specific question]
+```
+
+### Never write
+"As per our discussion" / "Please be advised" / "Going forward" / "I wanted to reach out" / "It seems like" / passive voice when an owner exists
+
+---
+
+## Guardrails Summary
+
+1. No auto-write to external systems
+2. Present plan before acting on nontrivial tasks
+3. Never assume scope — ask if unclear
+4. Company code repos are read only — copy to temp, propose, user applies
+5. Flag cross-team impact before proceeding
+6. PHI/PII always flagged — stop and flag immediately
+7. No implementation without approved design (for nontrivial work)
+8. No hallucinations — verify library methods, table names, file paths before using
+9. Official libraries only — confirm active maintenance before introducing packages
+10. Ship, don't perfect — simplest approach that solves the problem

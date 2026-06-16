@@ -1,0 +1,106 @@
+---
+description: Session context for the data integration AI system. Your role, stack, active tickets, and current session goal. Read this to orient before any work.
+globs: "**/*"
+alwaysApply: true
+---
+
+# Session Context
+
+This file is deployed by `install.sh` from `claude-dotfiles/cursor-rules/`. Do not edit the deployed copy.
+For latest active ticket state, read `02-tickets/delta.json`.
+
+---
+
+## Who You Are
+
+**[YOUR NAME]** — [YOUR TITLE], [YOUR COMPANY]
+- Owns: client relationships (onboarding, weekly calls), data ingestion (raw to Bronze layer), end product QC and alerting, coordination with Data Platform team
+
+**Stack:**
+| Tool | Role |
+|---|---|
+| Databricks | Compute, notebooks, pipelines |
+| Delta Lake | Data format across all layers |
+| Azure | Cloud infrastructure, storage |
+| Unity Catalog | Metadata, governance, schema registry |
+| Obsidian (knowledge vault) | Documentation vault, local and git backed |
+| Jira | Process tracking |
+| Confluence | Company documentation (read only) |
+| GitHub | Version control |
+| VSCode + Claude Code | Primary dev environment |
+| Cursor | Secondary AI tool, same vault, same rules |
+
+---
+
+## Machine Paths
+
+| Label | Path |
+|---|---|
+| Vault | `$QH_KNOWLEDGE` |
+| Dotfiles | `$CLAUDE_DOTFILES` |
+| Scripts | `$QH_SCRIPTS` |
+| Meeting notes | `$QH_MEETINGS` |
+
+---
+
+## Active Tickets (from delta.json — verify before acting)
+
+| Key | Summary | Status | Client |
+|---|---|---|---|
+| [Load from `02-tickets/delta.json`] | | | |
+
+For full ticket list: read `02-tickets/delta.json`
+For ticket detail: read `02-tickets/{KEY}/{KEY}-state.md`
+
+---
+
+## Skills Reference
+
+Skills live in `claude-dotfiles/commands/`. Reference these for workflow patterns:
+
+| Skill | When |
+|---|---|
+| `/start` | Beginning of every session: Jira sync, vault health, blockers |
+| `/close` | End of every work block: session log, memory, dotfiles commit, vault commit |
+| `/qh-ticket [ID]` | Work a Jira ticket: investigate, coordinate, draft comment |
+| `/explore [topic]` | Learn a new system area, pipeline, or client context |
+| `/learn [topic]` | Deep learning session |
+| `/weekly [CLIENT]` | Before a client call |
+| `/qh-spec [ID]` | Define WHAT: requirements, acceptance criteria, success metrics |
+| `/qh-arch [ID]` | Design HOW: options, tradeoffs, recommendation |
+| `/qh-dev [ID]` | Implementation after approved design |
+| `/qh-qa [ID]` | Adversarial review before PR |
+
+**In Cursor:** these skills don't auto-execute. Read the skill file in `claude-dotfiles/commands/[skill].md` and follow the steps manually, or ask Cursor to follow the steps.
+
+---
+
+## Current Session Goal
+
+[Fill in before starting work. What are you trying to accomplish today?]
+
+---
+
+## How This Vault Is Structured for AI
+
+1. **Read `00-landing/session-log.md`** — what happened in recent sessions
+2. **Read `02-tickets/delta.json`** — current ticket state (authoritative)
+3. **Read the relevant ticket state file** `02-tickets/{KEY}/{KEY}-state.md` before doing any ticket work
+4. **Read `01-system-map/`** for pipeline and client context
+5. **Write new learnings** to `03-knowledge-base/learnings/YYYY-MM-DD-topic.md`
+6. **Update session log** at the end of every session
+7. **Commit vault** at the end of every session: `git add -A && git commit -m "session: YYYY-MM-DD [description]" && git push`
+
+---
+
+## Coding Standards
+
+- Type hints on all function signatures
+- Functions 40 lines or fewer. Decompose if longer.
+- No magic numbers. Named constants only.
+- No `print()` for logging. Use proper logging framework.
+- No commented out code.
+- No TODO in committed code. Capture in Jira or vault.
+- File headers on every new file (Author / Date / Scope / Ticket / ChangeLog)
+- No secrets in code. Credentials via environment variables or Azure Key Vault only.
+- Verify before using. Any library method or API must be confirmed to exist before generating code.
