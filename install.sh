@@ -232,8 +232,19 @@ INSTALL_MODE="fresh"
 DETECTED_PREFIX=""
 DETECTED_VAULT=""
 DETECTED_NAME=""
+DETECTED_TITLE=""
+DETECTED_COMPANY=""
+DETECTED_DOMAIN=""
+DETECTED_BASE=""
 CUSTOM_SKILLS=()
 BACKUP_DIR=""
+ARBITER_CONFIG="$HOME/.claude/arbiter-config"
+
+# Load saved config from a previous run so users don't re-enter everything
+if [ -f "$ARBITER_CONFIG" ]; then
+  # shellcheck source=/dev/null
+  source "$ARBITER_CONFIG"
+fi
 
 _count_files() { { ls "$1"/*.md 2>/dev/null || true; } | wc -l | tr -d ' '; }
 
@@ -257,6 +268,10 @@ if [ -d "$CLAUDE_DIR" ] && [ "$(ls -A "$CLAUDE_DIR" 2>/dev/null)" ]; then
   if [ -f "$CLAUDE_DIR/CLAUDE.md" ]; then
     DETECTED_NAME=$(grep -m1 "^\*\*Name:\*\*" "$CLAUDE_DIR/CLAUDE.md" 2>/dev/null \
       | sed 's/\*\*Name:\*\* //' | tr -d '\r' || echo "")
+    DETECTED_TITLE=$(grep -m1 "^\*\*Title:\*\*" "$CLAUDE_DIR/CLAUDE.md" 2>/dev/null \
+      | sed 's/\*\*Title:\*\* //' | tr -d '\r' || echo "")
+    DETECTED_COMPANY=$(grep -m1 "^\*\*Company:\*\*" "$CLAUDE_DIR/CLAUDE.md" 2>/dev/null \
+      | sed 's/\*\*Company:\*\* //' | tr -d '\r' || echo "")
   fi
 
   if [ "$SIMPLE_MODE" = true ]; then
@@ -436,28 +451,41 @@ echo ""
 
 GIT_NAME=$(git config user.name 2>/dev/null || echo "")
 GIT_EMAIL=$(git config user.email 2>/dev/null || echo "")
-_default_name="${DETECTED_NAME:-$GIT_NAME}"
+_default_name="${SAVED_NAME:-${DETECTED_NAME:-$GIT_NAME}}"
+_default_title="${SAVED_TITLE:-${DETECTED_TITLE:-Data Integration Manager}}"
+_default_company="${SAVED_COMPANY:-${DETECTED_COMPANY:-}}"
+_default_domain="${SAVED_DOMAIN:-Health AI}"
 
 USER_NAME=$(ask  "Your full name"    "$_default_name")
 while [ -z "$USER_NAME" ]; do
   echo "  Name is required."
   USER_NAME=$(ask "Your full name" "")
 done
-USER_TITLE=$(ask "Your job title"    "Data Integration Manager")
-USER_COMPANY=$(ask "Your company"   "")
-USER_DOMAIN=$(ask  "Your industry (e.g. Health AI, FinTech, Insurance)" "Health AI")
+USER_TITLE=$(ask "Your job title"    "$_default_title")
+USER_COMPANY=$(ask "Your company"   "$_default_company")
+USER_DOMAIN=$(ask  "Your industry (e.g. Health AI, FinTech, Insurance)" "$_default_domain")
 
 if [ "$SIMPLE_MODE" = true ]; then
   # Auto-generate prefix from name initials; don't expose the concept to the user
   _auto_prefix=$(make_prefix "$USER_NAME")
   [ -z "$_auto_prefix" ] && _auto_prefix="dt"
-  SKILL_PREFIX="${DETECTED_PREFIX:-$_auto_prefix}"
+  SKILL_PREFIX="${SAVED_PREFIX:-${DETECTED_PREFIX:-$_auto_prefix}}"
 else
-  _default_prefix="${DETECTED_PREFIX:-dt}"
+  _default_prefix="${SAVED_PREFIX:-${DETECTED_PREFIX:-dt}}"
   SKILL_PREFIX=$(ask "Skill prefix (e.g. 'ah' gives /ah-ticket, 'dt' gives /dt-ticket)" "$_default_prefix")
 fi
 
 PREFIX_UPPER=$(echo "$SKILL_PREFIX" | tr '[:lower:]' '[:upper:]')
+
+# Save answers so re-runs don't require re-entry
+mkdir -p "$CLAUDE_DIR"
+cat > "$ARBITER_CONFIG" << SAVEDCONFIG
+SAVED_NAME="$USER_NAME"
+SAVED_TITLE="$USER_TITLE"
+SAVED_COMPANY="$USER_COMPANY"
+SAVED_DOMAIN="$USER_DOMAIN"
+SAVED_PREFIX="$SKILL_PREFIX"
+SAVEDCONFIG
 
 # ── Step 2: Folder Setup ──────────────────────────────────────────────────────
 if [ "$SIMPLE_MODE" = false ]; then
@@ -489,7 +517,7 @@ if [ "$SIMPLE_MODE" = true ]; then
   CODE_DIR="${BASE_DIR}/${SKILL_PREFIX}-code"
   DEV_DIR="${BASE_DIR}/${SKILL_PREFIX}-dev"
 else
-  BASE_DIR=$(ask "Base folder path (e.g. ~/Developer/yourname)" "$DEFAULT_BASE")
+  BASE_DIR=$(ask "Base folder path (press Enter for default)" "${SAVED_BASE:-$DEFAULT_BASE}")
   BASE_DIR="${BASE_DIR/#\~/$HOME}"
   DOTFILES_DIR="${BASE_DIR}/${SKILL_PREFIX}-dotfiles"
   VAULT_DIR="${DETECTED_VAULT:-${BASE_DIR}/${SKILL_PREFIX}-knowledge}"
@@ -515,6 +543,9 @@ else
 fi
 
 mkdir -p "$BASE_DIR" "$SCRIPTS_DIR"
+
+# Persist the resolved base path for future re-runs
+echo "SAVED_BASE=\"$BASE_DIR\"" >> "$ARBITER_CONFIG"
 
 # ── Step 3: Create Folder Structure ──────────────────────────────────────────
 if [ "$SIMPLE_MODE" = false ]; then
@@ -553,7 +584,8 @@ mkdir -p "$CODE_DIR" "$DEV_DIR"
 # Advanced only: optional scripts git tracking and read-only repo sync
 if [ "$SIMPLE_MODE" = false ]; then
   echo ""
-  echo "  ${SKILL_PREFIX}-scripts/ (reusable scripts)"
+  echo "  ${SKILL_PREFIX}-scripts/ — your personal reusable scripts folder"
+  dim "  Optional: back this up with git so your scripts are version controlled and recoverable."
   SCRIPTS_GIT=""
   read -rp "  Track scripts with git? [y/N]: " SCRIPTS_GIT
   echo ""
@@ -577,6 +609,8 @@ __pycache__/
 *.key
 GITIGNORE
     ok "Created .gitignore for scripts"
+    dim "  Paste the GitHub repo URL where your scripts should be pushed (e.g. https://github.com/you/my-scripts)."
+    dim "  This is for YOUR scripts repo — not a company repo you read from."
     SCRIPTS_REMOTE=$(ask "  GitHub repo URL for scripts (Enter to skip)" "")
     if [ -n "$SCRIPTS_REMOTE" ]; then
       if git -C "$SCRIPTS_DIR" remote get-url origin &>/dev/null; then
@@ -591,12 +625,15 @@ GITIGNORE
   fi
 
   echo ""
-  echo "  ${SKILL_PREFIX}-developer directories (git workflow)"
+  echo "  Code repo directories (read-only source + active dev)"
   echo ""
-  info "  ${SKILL_PREFIX}-code/  →  read-only. Claude reads here for design validation."
-  info "  ${SKILL_PREFIX}-dev/   →  active checkouts. Feature branches live here."
+  info "  ${SKILL_PREFIX}-code/  →  read-only mirror. Claude reads your company repos here"
+  info "                            for design validation. You never edit files here."
+  info "  ${SKILL_PREFIX}-dev/   →  your active working checkouts. All feature branch"
+  info "                            work happens here."
   echo ""
-  echo "  Which repos do you want synced into ${SKILL_PREFIX}-code/ (read-only)?"
+  echo "  Which company repos do you want mirrored into ${SKILL_PREFIX}-code/ (read-only)?"
+  dim "  These are repos you need Claude to read for context — e.g. your data platform repo."
   dim "  Enter full GitHub clone URLs, one per line. Press Enter on a blank line when done."
   echo ""
   SYNC_REPOS=()
@@ -639,13 +676,18 @@ mkdir -p "$CLAUDE_DIR" "$(dirname "$MEMORY_TARGET")"
 
 backup "$CLAUDE_DIR/settings.json"
 sed \
-  -e "s|QH_KNOWLEDGE|${PREFIX_UPPER}_KNOWLEDGE|g" \
-  -e "s|QH_MEETINGS|${PREFIX_UPPER}_MEETINGS|g" \
   -e "s|QH_SCRIPTS|${PREFIX_UPPER}_SCRIPTS|g" \
   "$REPO_DIR/settings.json" > "$CLAUDE_DIR/settings.json"
 ok "Settings configured"
 
 symlink "$REPO_DIR/memory" "$MEMORY_TARGET"
+
+# Escape user-supplied strings before embedding in sed replacement positions.
+# & means "matched text" in sed replacements; | closes our delimiter; \ is the escape char.
+USER_NAME_ESC=$(_sed_escape "$USER_NAME")
+USER_TITLE_ESC=$(_sed_escape "$USER_TITLE")
+USER_COMPANY_ESC=$(_sed_escape "$USER_COMPANY")
+USER_DOMAIN_ESC=$(_sed_escape "$USER_DOMAIN")
 
 # Install commands with prefix substitution
 mkdir -p "$CLAUDE_DIR/commands"
@@ -673,19 +715,22 @@ for src_file in "$REPO_DIR/commands/"*.md; do
     -e "s|QH_SCRIPTS|${PREFIX_UPPER}_SCRIPTS|g" \
     -e "s|qh-code-temp|${SKILL_PREFIX}-code-temp|g" \
     -e "s|qh-code/|${SKILL_PREFIX}-code/|g" \
+    -e "s|qh-scripts|${SKILL_PREFIX}-scripts|g" \
     -e "s|{NAME}|${USER_NAME_ESC}|g" \
     "$src_file" > "$CLAUDE_DIR/commands/$dest_name"
   [ "$SIMPLE_MODE" = false ] && ok "Installed: $dest_name"
 done
 [ "$SIMPLE_MODE" = true ] && ok "Commands installed"
 
-# Cursor rules
+# Cursor rules — each rule is independently toggled
+# Disabled rules are stored as .mdc.disabled so users can re-enable without re-running install.sh
 if [ -d "$REPO_DIR/cursor-rules" ]; then
   CURSOR_RULES_DEST="$VAULT_DIR/.cursor/rules"
-  mkdir -p "$CURSOR_RULES_DEST"
-  for src_file in "$REPO_DIR/cursor-rules/"*.mdc; do
-    [ -f "$src_file" ] || continue
-    base=$(basename "$src_file")
+  CURSOR_RULES_DISABLED="$VAULT_DIR/.cursor/rules-disabled"
+  mkdir -p "$CURSOR_RULES_DEST" "$CURSOR_RULES_DISABLED"
+
+  _apply_cursor_rule() {
+    local src_file="$1" dest="$2"
     sed \
       -e "s|/qh-ticket|/${SKILL_PREFIX}-ticket|g" \
       -e "s|/qh-support|/${SKILL_PREFIX}-support|g" \
@@ -699,12 +744,56 @@ if [ -d "$REPO_DIR/cursor-rules" ]; then
       -e "s|QH_SCRIPTS|${PREFIX_UPPER}_SCRIPTS|g" \
       -e "s|qh-code-temp|${SKILL_PREFIX}-code-temp|g" \
       -e "s|qh-code/|${SKILL_PREFIX}-code/|g" \
+      -e "s|qh-scripts|${SKILL_PREFIX}-scripts|g" \
       -e "s|\[YOUR NAME\]|${USER_NAME_ESC}|g" \
       -e "s|\[YOUR TITLE\]|${USER_TITLE_ESC}|g" \
       -e "s|\[YOUR COMPANY\]|${USER_COMPANY_ESC}|g" \
-      "$src_file" > "$CURSOR_RULES_DEST/$base"
-    [ "$SIMPLE_MODE" = false ] && ok "Cursor rule: $base"
-  done
+      -e "s|Health AI\. PHI/PII rules apply at all times, no exceptions\.|${USER_DOMAIN_ESC}. PHI/PII rules apply at all times, no exceptions.|g" \
+      -e "s|/{prefix}-|/${SKILL_PREFIX}-|g" \
+      "$src_file" > "$dest"
+  }
+
+  if [ "$SIMPLE_MODE" = true ]; then
+    # Quick mode: install all rules enabled
+    for src_file in "$REPO_DIR/cursor-rules/"*.mdc; do
+      [ -f "$src_file" ] || continue
+      base=$(basename "$src_file")
+      _apply_cursor_rule "$src_file" "$CURSOR_RULES_DEST/$base"
+    done
+    ok "Cursor rules installed (all enabled)"
+  else
+    echo ""
+    echo "  Cursor rules — choose which to enable"
+    dim "  Rules that are off are saved to rules-disabled/ and can be moved back any time."
+    echo ""
+
+    _RULE_CHOICES=()
+    for src_file in "$REPO_DIR/cursor-rules/"*.mdc; do
+      [ -f "$src_file" ] || continue
+      base=$(basename "$src_file" .mdc)
+      # Extract description from frontmatter
+      _desc=$(grep -m1 "^description:" "$src_file" 2>/dev/null | sed 's/^description: *//' | tr -d '"' || echo "$base")
+      printf "  Enable %-22s %s\n" "$base" "$_desc"
+      read -rp "  [Y/n]: " _rule_yn
+      _rule_yn="${_rule_yn:-y}"
+      _RULE_CHOICES+=("$(basename "$src_file"):${_rule_yn}")
+    done
+
+    echo ""
+    for _entry in "${_RULE_CHOICES[@]}"; do
+      _rfile="${_entry%%:*}"
+      _yn="${_entry##*:}"
+      src_file="$REPO_DIR/cursor-rules/$_rfile"
+      if [[ "$_yn" =~ ^[Yy] ]]; then
+        _apply_cursor_rule "$src_file" "$CURSOR_RULES_DEST/$_rfile"
+        ok "Cursor rule enabled:  $_rfile"
+      else
+        _apply_cursor_rule "$src_file" "$CURSOR_RULES_DISABLED/$_rfile"
+        note "Cursor rule disabled: $_rfile  (saved to rules-disabled/)"
+      fi
+    done
+    dim "  To toggle later: move .mdc files between .cursor/rules/ and .cursor/rules-disabled/"
+  fi
 fi
 
 # Preserve custom skills from migration
@@ -731,16 +820,16 @@ if [ "$INSTALL_MODE" = "migrate" ] && [ -n "$BACKUP_DIR" ]; then
 fi
 
 # ── Step 5: Write CLAUDE.md ───────────────────────────────────────────────────
-# Escape user-supplied strings before embedding in sed replacement positions.
-# & means "matched text" in sed replacements; | closes our delimiter; \ is the escape char.
-USER_NAME_ESC=$(_sed_escape "$USER_NAME")
-USER_TITLE_ESC=$(_sed_escape "$USER_TITLE")
-USER_COMPANY_ESC=$(_sed_escape "$USER_COMPANY")
-USER_DOMAIN_ESC=$(_sed_escape "$USER_DOMAIN")
 
 CLAUDE_DEST="$CLAUDE_DIR/CLAUDE.md"
 backup "$CLAUDE_DEST"
 
+CODE_DIR_ESC=$(_sed_escape "$CODE_DIR")
+DEV_DIR_ESC=$(_sed_escape "$DEV_DIR")
+VAULT_DIR_ESC=$(_sed_escape "$VAULT_DIR")
+SCRIPTS_DIR_ESC=$(_sed_escape "$SCRIPTS_DIR")
+MEETINGS_DIR_ESC=$(_sed_escape "$MEETINGS_DIR")
+DOTFILES_DIR_ESC=$(_sed_escape "$DOTFILES_DIR")
 sed \
   -e "s|\[YOUR NAME\]|${USER_NAME_ESC}|g" \
   -e "s|\[YOUR TITLE\]|${USER_TITLE_ESC}|g" \
@@ -755,6 +844,14 @@ sed \
   -e "s|/{prefix}-arch|/${SKILL_PREFIX}-arch|g" \
   -e "s|/{prefix}-dev|/${SKILL_PREFIX}-dev|g" \
   -e "s|/{prefix}-qa|/${SKILL_PREFIX}-qa|g" \
+  -e "s|{CODE_DIR}|${CODE_DIR_ESC}|g" \
+  -e "s|{DEV_DIR}|${DEV_DIR_ESC}|g" \
+  -e "s|{VAULT_DIR}|${VAULT_DIR_ESC}|g" \
+  -e "s|{SCRIPTS_DIR}|${SCRIPTS_DIR_ESC}|g" \
+  -e "s|{MEETINGS_DIR}|${MEETINGS_DIR_ESC}|g" \
+  -e "s|{DOTFILES_DIR}|${DOTFILES_DIR_ESC}|g" \
+  -e "s|{PREFIX_UPPER}|${PREFIX_UPPER}|g" \
+  -e "s|{SKILL_PREFIX}|${SKILL_PREFIX}|g" \
   "$REPO_DIR/CLAUDE.md" > "$CLAUDE_DEST"
 
 ok "Profile written for $USER_NAME"

@@ -33,12 +33,12 @@
 
 **Env vars required.** install.sh adds these to your shell profile automatically.
 ```
-export {PREFIX}_SCRIPTS=~/path/to/your/scripts
-export {PREFIX}_KNOWLEDGE=~/path/to/your/vault
-export {PREFIX}_MEETINGS=~/path/to/your/meetings
-export CLAUDE_DOTFILES=~/path/to/your/claude-dotfiles
+export {PREFIX_UPPER}_SCRIPTS="{SCRIPTS_DIR}"
+export {PREFIX_UPPER}_KNOWLEDGE="{VAULT_DIR}"
+export {PREFIX_UPPER}_MEETINGS="{MEETINGS_DIR}"
+export ARBITER_KNOWLEDGE="{VAULT_DIR}"
+export CLAUDE_DOTFILES="{DOTFILES_DIR}"
 ```
-`{PREFIX}` is the uppercase version of your chosen prefix (e.g. `DP` if prefix is `dp`).
 
 See `docs/setup.md` for the full setup guide.
 
@@ -135,7 +135,7 @@ Presenting one option without naming rejected alternatives is not acceptable. If
 | Obsidian vault | Write, but state exactly what was written and where. |
 | Git | Never commit without explicit approval. |
 | Confluence | Read only. |
-| Notion | Never write directly. Whole-company visible. Stage draft to `{PREFIX}_KNOWLEDGE/output/notion-drafts/[page-id].md`, present for review. The user or automation writes to Notion after approval. |
+| Notion | Never write directly. Whole-company visible. Stage draft to `$ARBITER_KNOWLEDGE/output/notion-drafts/[page-id].md`, present for review. The user or automation writes to Notion after approval. |
 
 ### 2. Present plan before acting
 At the start of every skill run, state what you are about to do, what you will read, and what you will produce. Wait for confirmation before proceeding.
@@ -145,14 +145,14 @@ If it is unclear whether something is in scope, ask. Don't expand scope silently
 
 ### 4. Git workflow: two directories, two scopes
 
-**Why this separation exists:** `{prefix}-code/` is the read-only source of truth for every repo at latest main. It exists so Claude can read current code for design validation without any risk of accidental writes. `{prefix}-dev/` is where all active work happens on feature branches. Keeping them separate eliminates the class of mistakes where a stray write lands on main in a shared repo.
+**Why this separation exists:** `{CODE_DIR}/` is the read-only source of truth for every repo at latest main. It exists so Claude can read current code for design validation without any risk of accidental writes. `{DEV_DIR}/` is where all active work happens on feature branches. Keeping them separate eliminates the class of mistakes where a stray write lands on main in a shared repo.
 
-**Setup note:** When git is configured during `install.sh` setup, it creates both directories automatically and asks which repos you want synced into `{prefix}-code/`. Synced repos stay at latest main via a cron or manual pull. You never work directly in `{prefix}-code/`.
+**Setup note:** When git is configured during `install.sh` setup, it creates both directories automatically and asks which repos you want synced into `{CODE_DIR}/`. Synced repos stay at latest main via a cron or manual pull. You never work directly in `{CODE_DIR}/`.
 
 | Directory | AI may | AI may not |
 |---|---|---|
-| `~/Developer/{prefix}-code/` (read-only source) | Read for design validation | Write, commit, create branches |
-| `~/Developer/{prefix}-dev/{repo-name}/` (active checkout) | Create branches, write files, commit locally | Push to remote, merge to main directly |
+| `{CODE_DIR}/` (read-only source) | Read for design validation | Write, commit, create branches |
+| `{DEV_DIR}/{repo-name}/` (active checkout) | Create branches, write files, commit locally | Push to remote, merge to main directly |
 
 **Branch policy (mandatory):**
 1. All work starts from a feature branch created from `main`. Never work directly on `main`.
@@ -163,7 +163,7 @@ If it is unclear whether something is in scope, ask. Don't expand scope silently
 
 **Repo name rule:** Always derive the repo name from `git remote get-url origin`, not the directory name. The directory can be renamed; the remote does not change.
 
-**Multiple branches of the same repo:** Clone into separate folders `{prefix}-dev/{repo-name}-{ticket}/` so each checkout is independent.
+**Multiple branches of the same repo:** Clone into separate folders `{DEV_DIR}/{repo-name}-{ticket}/` so each checkout is independent.
 
 ### 5. Flag cross-team impact explicitly
 If something affects the Data Platform team or downstream consumers, flag it before proceeding. Don't let the impact surface after the fact.
@@ -338,7 +338,7 @@ Full Python/SQL/Databricks/Notebook detail: `$CLAUDE_DOTFILES/standards/coding-s
 | `/whiteboard quick [idea]` | Quick sanity check on a small or low-stakes idea |
 
 ### Ticket work
-Skills prefixed with `/{prefix}-` use your chosen prefix. install.sh sets this during setup.
+Skills prefixed with `/{SKILL_PREFIX}-` use your configured prefix.
 
 | Skill | When |
 |---|---|
@@ -372,7 +372,7 @@ Skills prefixed with `/{prefix}-` use your chosen prefix. install.sh sets this d
 
 ## Knowledge Vault
 
-Set up a personal Obsidian vault at `${PREFIX}_KNOWLEDGE`. Every skill writes context here. Skills commit to this vault at session close.
+Your knowledge vault is at `$ARBITER_KNOWLEDGE`. Every skill writes context here. Skills commit to this vault at session close.
 
 Recommended folder structure:
 ```
