@@ -9,13 +9,12 @@ CREDS_SCRIPT="$CLAUDE_DIR/credentials.sh"
 KC_PREFIX="claude-dotfiles"
 OS="$(uname -s)"   # Darwin | Linux | MINGW* | CYGWIN*
 
-# ── Formatting ───────────────────────────────────────────────────────────────
-BOLD='\033[1m'
-RESET='\033[0m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-DIM='\033[2m'
-CYAN='\033[0;36m'
+# Standard skills list (used in migration analysis and custom-skill detection)
+STANDARD_SKILLS="ticket support spec arch dev qa start close draft weekly status learn sync save whiteboard setup-client pull-notes explore lens"
+
+# ── Formatting ────────────────────────────────────────────────────────────────
+BOLD='\033[1m'; RESET='\033[0m'; GREEN='\033[0;32m'
+YELLOW='\033[0;33m'; DIM='\033[2m'; CYAN='\033[0;36m'
 
 header() { echo -e "\n${BOLD}── $1 ──${RESET}"; }
 ok()     { echo -e "  ${GREEN}✓${RESET}  $1"; }
@@ -23,11 +22,9 @@ note()   { echo -e "  ${YELLOW}→${RESET}  $1"; }
 dim()    { echo -e "  ${DIM}$1${RESET}"; }
 info()   { echo -e "  ${CYAN}$1${RESET}"; }
 
-# ── Plain text prompt ────────────────────────────────────────────────────────
+# ── Plain-text prompt ─────────────────────────────────────────────────────────
 ask() {
-  local prompt="$1"
-  local default="${2:-}"
-  local result
+  local prompt="$1" default="${2:-}" result
   if [ -n "$default" ]; then
     read -rp "  $prompt [$default]: " result
     echo "${result:-$default}"
@@ -37,7 +34,7 @@ ask() {
   fi
 }
 
-# ── Cross-platform credential read ──────────────────────────────────────────
+# ── Cross-platform credential read ────────────────────────────────────────────
 cred_read() {
   local service="${KC_PREFIX}-$1"
   case "$OS" in
@@ -48,17 +45,12 @@ cred_read() {
       if command -v secret-tool &>/dev/null; then
         secret-tool lookup service "$service" account "$USER" 2>/dev/null || echo ""
       else
-        # Fallback: read from encrypted secrets file
-        local secrets_file="$CLAUDE_DIR/.secrets"
-        if [ -f "$secrets_file" ]; then
-          grep "^${service}=" "$secrets_file" 2>/dev/null | cut -d= -f2- || echo ""
-        else
-          echo ""
-        fi
+        local sf="$CLAUDE_DIR/.secrets"
+        [ -f "$sf" ] && grep "^${service}=" "$sf" 2>/dev/null | cut -d= -f2- || echo ""
       fi
       ;;
     MINGW*|CYGWIN*|MSYS*)
-      cmdkey /list | grep -o "claude-dotfiles-$1" &>/dev/null \
+      cmdkey /list | grep -q "claude-dotfiles-$1" \
         && powershell -Command "(Get-StoredCredential -Target '${service}').GetNetworkCredential().Password" 2>/dev/null \
         || echo ""
       ;;
@@ -68,8 +60,7 @@ cred_read() {
 
 # ── Cross-platform credential write ──────────────────────────────────────────
 cred_store() {
-  local service="$1"
-  local value="$2"
+  local service="$1" value="$2"
   if [ -z "$value" ]; then
     note "Skipped (empty): ${service}"
     return
@@ -78,96 +69,102 @@ cred_store() {
   case "$OS" in
     Darwin)
       security add-generic-password -a "$USER" -s "$key" -w "$value" -U 2>/dev/null
-      ok "Keychain (macOS): ${service}"
+      ok "Saved to Keychain: ${service}"
       ;;
     Linux)
       if command -v secret-tool &>/dev/null; then
         printf '%s' "$value" | secret-tool store --label="$key" service "$key" account "$USER" 2>/dev/null
-        ok "Secret Service (Linux): ${service}"
+        ok "Saved to Secret Service: ${service}"
       else
-        # Fallback: append to mode-600 secrets file (line-based key=value)
-        local secrets_file="$CLAUDE_DIR/.secrets"
-        touch "$secrets_file" && chmod 600 "$secrets_file"
-        # Remove any existing entry for this key, then append
-        grep -v "^${key}=" "$secrets_file" > "${secrets_file}.tmp" 2>/dev/null || true
-        echo "${key}=${value}" >> "${secrets_file}.tmp"
-        mv "${secrets_file}.tmp" "$secrets_file"
-        ok "Secrets file (Linux fallback): ${service}"
+        local sf="$CLAUDE_DIR/.secrets"
+        # umask 077 scopes both tmp and final file to 0600 from creation;
+        # avoids the window where touch+chmod leaves the file world-readable
+        # and avoids mv replacing a 0600 file with a 0644 tmp.
+        ( umask 077
+          grep -v "^${key}=" "$sf" 2>/dev/null > "${sf}.tmp" || true
+          echo "${key}=${value}" >> "${sf}.tmp"
+          mv "${sf}.tmp" "$sf"
+        )
+        ok "Saved to secrets file: ${service}"
         note "Install secret-tool for better security: sudo apt install libsecret-tools"
       fi
       ;;
     MINGW*|CYGWIN*|MSYS*)
       cmdkey /generic:"$key" /user:"$USER" /pass:"$value" &>/dev/null
-      ok "Credential Manager (Windows): ${service}"
+      ok "Saved to Credential Manager: ${service}"
       ;;
     *)
-      note "Unknown OS — credential storage not supported. Token for ${service} not stored."
+      note "Unknown OS — could not save ${service}. You may need to re-enter it next time."
       ;;
   esac
 }
 
 # ── Hidden token prompt (credential-store-aware) ──────────────────────────────
 ask_secret() {
-  local prompt="$1"
-  local service="$2"
-  local result existing masked
-
+  local prompt="$1" service="$2" result existing masked
   existing=$(cred_read "$service")
-
   if [ -n "$existing" ]; then
     masked="****${existing: -4}"
-    read -rsp "  $prompt [stored: ${masked}, Enter to keep]: " result
+    read -rsp "  $prompt [saved: ${masked} — press Enter to keep]: " result
     echo "" >&2
     if [ -z "$result" ]; then echo "$existing"; else echo "$result"; fi
   else
-    read -rsp "  $prompt [Enter to skip]: " result
+    read -rsp "  $prompt [press Enter to skip]: " result
     echo "" >&2
     echo "$result"
   fi
 }
 
-# ── Connection method chooser ────────────────────────────────────────────────
+# ── Connection chooser ────────────────────────────────────────────────────────
 # Sets global CONNECTION_CHOICE to "mcp", "api", or "skip"
 CONNECTION_CHOICE=""
 choose_connection() {
-  local service="$1"
-  local has_mcp="$2"   # "yes" or "no"
-  local result
-
+  local service="$1" has_mcp="$2" result
   echo ""
-  info "How to connect $service:"
   if [ "$has_mcp" = "yes" ]; then
-    echo "    m) MCP / browser OAuth   No token needed. Browser opens on first use."
-    echo "    a) API token             Enter your token now, stored in Keychain."
+    echo "    b) Sign in with your browser   Easiest — a login page opens automatically, no key needed."
+    echo "    k) Paste an API key            If you already have one ready."
+  else
+    echo "    k) Paste an API key            Required for this service."
   fi
-  echo "    s) Skip                  Add later by re-running install.sh."
+  echo "    s) Skip for now                Add this later by re-running install.sh."
   echo ""
-
   while true; do
     if [ "$has_mcp" = "yes" ]; then
-      read -rp "  Choice [m/a/s]: " result
+      read -rp "  Choice [b/k/s]: " result
       result=$(echo "$result" | tr '[:upper:]' '[:lower:]')
       case "$result" in
-        m) CONNECTION_CHOICE="mcp";  return;;
-        a) CONNECTION_CHOICE="api";  return;;
+        b) CONNECTION_CHOICE="mcp";  return;;
+        k) CONNECTION_CHOICE="api";  return;;
         s) CONNECTION_CHOICE="skip"; return;;
-        *) echo "  Enter m, a, or s.";;
+        *) echo "  Please type b, k, or s.";;
       esac
     else
-      read -rp "  Choice [a/s]: " result
+      read -rp "  Choice [k/s]: " result
       result=$(echo "$result" | tr '[:upper:]' '[:lower:]')
       case "$result" in
-        a) CONNECTION_CHOICE="api";  return;;
+        k) CONNECTION_CHOICE="api";  return;;
         s) CONNECTION_CHOICE="skip"; return;;
-        *) echo "  Enter a or s.";;
+        *) echo "  Please type k or s.";;
       esac
     fi
   done
 }
 
-# cred_store is now cred_store — defined above with cross-platform support
+# ── Escape user input for sed replacement strings ────────────────────────────
+# Escapes \, &, and the | delimiter so user-supplied strings (names, company)
+# cannot corrupt sed expressions or produce garbled output files.
+_sed_escape() {
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/&/\\&/g; s/|/\\|/g'
+}
 
-# ── Backup + symlink ─────────────────────────────────────────────────────────
+# ── Auto-generate prefix from name initials ───────────────────────────────────
+make_prefix() {
+  echo "$1" | tr '[:upper:]' '[:lower:]' \
+    | awk '{r=""; for(i=1;i<=NF&&i<=3;i++) r=r substr($i,1,1); print r}'
+}
+
+# ── Backup + symlink ──────────────────────────────────────────────────────────
 backup() {
   local path="$1"
   if [ -e "$path" ] && [ ! -L "$path" ]; then
@@ -177,8 +174,7 @@ backup() {
 }
 
 symlink() {
-  local src="$1"
-  local dest="$2"
+  local src="$1" dest="$2"
   backup "$dest"
   if [ -L "$dest" ] && [ "$(readlink "$dest")" = "$src" ]; then
     ok "Already linked: $(basename "$dest")"
@@ -191,38 +187,55 @@ symlink() {
 # ════════════════════════════════════════════════════════════════════════════
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  Arbiter: Setup"
+echo "  Arbiter  —  AI assistant setup"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "  What this does:"
-echo "    1.  Collect your identity and folder preferences"
-echo "    2.  Create your knowledge vault with all subfolders"
-echo "    3.  Install Claude Code config (symlinks to ~/.claude)"
-echo "    4.  Write your identity into CLAUDE.md"
-echo "    5.  Connect each service: MCP browser auth or API token"
-echo "    6.  Generate credentials loader (Keychain, no tokens in files)"
-echo "    7.  Configure MCP servers"
-echo "    8.  Add environment variables to your shell profile"
-echo "    9.  Wire Claude Code hooks (vault search, secret scrubbing)"
-echo "    10. Install Python deps and build the initial vault search index"
+echo "  Sets up Claude Code to work the way your team works."
+echo "  Takes about 5 minutes."
 echo ""
-echo "  Read docs/prerequisites.md before continuing."
-echo "  Press Enter to accept defaults shown in [brackets]."
+echo "  What it does:"
+echo "    • Creates a personal notes folder for your work"
+echo "    • Connects Claude to Jira, Notion, and Slack"
+echo "    • Saves your details so Claude knows who you are"
 echo ""
-echo "  Built by Dipen Patel. Questions? Contact Dipen via Slack or Email."
+echo "  Press Enter at any prompt to use the suggested answer."
+echo "  Built by Dipen Patel — questions? Ask Dipen on Slack."
 echo ""
-read -rp "  Ready? Press Enter to continue (or Ctrl-C to exit): "
+read -rp "  Ready? Press Enter to start (or Ctrl-C to exit): "
 echo ""
 
-# ── Detect existing setup ────────────────────────────────────────────────────
-INSTALL_MODE="fresh"          # fresh | migrate | clean
+# ── Quick or Advanced? ────────────────────────────────────────────────────────
+SIMPLE_MODE=true
+
+echo ""
+echo "  Setup style:"
+echo ""
+echo "    q) Quick    Recommended. Sensible defaults, fewer questions. (~5 min)"
+echo "    a) Advanced Full control over every folder and option. (~10 min)"
+echo ""
+
+while true; do
+  read -rp "  Choice [q/a, default q]: " _mode_input
+  _mode_input="${_mode_input:-q}"
+  _mode_input=$(echo "$_mode_input" | tr '[:upper:]' '[:lower:]')
+  case "$_mode_input" in
+    q) SIMPLE_MODE=true;  break;;
+    a) SIMPLE_MODE=false; break;;
+    *) echo "  Please type q or a.";;
+  esac
+done
+
+echo ""
+
+# ── Detect existing setup ─────────────────────────────────────────────────────
+INSTALL_MODE="fresh"
 DETECTED_PREFIX=""
 DETECTED_VAULT=""
 DETECTED_NAME=""
 CUSTOM_SKILLS=()
 BACKUP_DIR=""
 
-_count_files() { ls "$1"/*.md 2>/dev/null | wc -l | tr -d ' '; }
+_count_files() { { ls "$1"/*.md 2>/dev/null || true; } | wc -l | tr -d ' '; }
 
 if [ -d "$CLAUDE_DIR" ] && [ "$(ls -A "$CLAUDE_DIR" 2>/dev/null)" ]; then
   EXISTING_COMMANDS=0
@@ -231,56 +244,75 @@ if [ -d "$CLAUDE_DIR" ] && [ "$(ls -A "$CLAUDE_DIR" 2>/dev/null)" ]; then
   [ -d "$CLAUDE_DIR/commands" ] && EXISTING_COMMANDS=$(_count_files "$CLAUDE_DIR/commands")
   EXISTING_MEMORIES=$(find "$CLAUDE_DIR/projects" -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
 
-  # Detect prefix from *-ticket.md filename
   TICKET_FILE=$(ls "$CLAUDE_DIR/commands/"*-ticket.md 2>/dev/null | head -1 || echo "")
   [ -n "$TICKET_FILE" ] && DETECTED_PREFIX=$(basename "$TICKET_FILE" | sed 's/-ticket\.md//')
 
-  # Detect existing vault path from any known env var patterns
-  for _v in QH_KNOWLEDGE DT_KNOWLEDGE DP_KNOWLEDGE SF_KNOWLEDGE; do
+  for _v in QH_KNOWLEDGE DT_KNOWLEDGE DP_KNOWLEDGE SF_KNOWLEDGE ARBITER_KNOWLEDGE; do
     if [ -n "${!_v:-}" ]; then
       DETECTED_VAULT="${!_v}"
       break
     fi
   done
 
-  # Try to read name from existing CLAUDE.md
   if [ -f "$CLAUDE_DIR/CLAUDE.md" ]; then
     DETECTED_NAME=$(grep -m1 "^\*\*Name:\*\*" "$CLAUDE_DIR/CLAUDE.md" 2>/dev/null \
       | sed 's/\*\*Name:\*\* //' | tr -d '\r' || echo "")
   fi
 
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "  Existing Claude Code setup found"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo ""
-  printf "  %-22s %s\n" "Commands found:"    "$EXISTING_COMMANDS files"
-  printf "  %-22s %s\n" "Memory files:"      "$EXISTING_MEMORIES files"
-  [ -n "$DETECTED_PREFIX" ] && printf "  %-22s %s\n" "Detected prefix:"  "$DETECTED_PREFIX"
-  [ -n "$DETECTED_NAME" ]   && printf "  %-22s %s\n" "Detected name:"    "$DETECTED_NAME"
-  [ -n "$DETECTED_VAULT" ]  && printf "  %-22s %s\n" "Existing vault:"   "$DETECTED_VAULT"
-  echo ""
-  echo "  What would you like to do?"
-  echo ""
-  echo "    m) Migrate   Keep your memory and vault, bring custom skills into the"
-  echo "                 new dotfiles structure, install new skills alongside them"
-  echo "    c) Clean     Wipe ~/.claude/ and start completely fresh"
-  echo ""
-  echo "  Either way, your existing ~/.claude/ is backed up first."
+  if [ "$SIMPLE_MODE" = true ]; then
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  Existing setup found"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    [ -n "$DETECTED_NAME" ] && echo "  Name on file: $DETECTED_NAME"
+    echo ""
+    echo "  What would you like to do?"
+    echo ""
+    echo "    k) Keep and update   Upgrade to the latest version, keep your notes."
+    echo "    f) Start fresh       Wipe everything and start over."
+    echo ""
+    while true; do
+      read -rp "  Choice [k/f, default k]: " _m_choice
+      _m_choice="${_m_choice:-k}"
+      _m_choice=$(echo "$_m_choice" | tr '[:upper:]' '[:lower:]')
+      case "$_m_choice" in
+        k) INSTALL_MODE="migrate"; break;;
+        f) INSTALL_MODE="clean";   break;;
+        *) echo "  Please type k or f.";;
+      esac
+    done
+  else
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  Existing Claude Code setup found"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    printf "  %-22s %s\n" "Commands found:"   "$EXISTING_COMMANDS files"
+    printf "  %-22s %s\n" "Memory files:"     "$EXISTING_MEMORIES files"
+    [ -n "$DETECTED_PREFIX" ] && printf "  %-22s %s\n" "Detected prefix:"  "$DETECTED_PREFIX"
+    [ -n "$DETECTED_NAME" ]   && printf "  %-22s %s\n" "Detected name:"    "$DETECTED_NAME"
+    [ -n "$DETECTED_VAULT" ]  && printf "  %-22s %s\n" "Existing vault:"   "$DETECTED_VAULT"
+    echo ""
+    echo "  What would you like to do?"
+    echo ""
+    echo "    m) Migrate   Keep your memory and vault, install new skills alongside them."
+    echo "    c) Clean     Wipe ~/.claude/ and start completely fresh."
+    echo ""
+    echo "  Either way, your existing ~/.claude/ is backed up first."
+    echo ""
+    while true; do
+      read -rp "  Choice [m/c]: " _choice
+      _choice=$(echo "$_choice" | tr '[:upper:]' '[:lower:]')
+      case "$_choice" in
+        m) INSTALL_MODE="migrate"; break;;
+        c) INSTALL_MODE="clean";   break;;
+        *) echo "  Enter m or c.";;
+      esac
+    done
+  fi
+
   echo ""
 
-  while true; do
-    read -rp "  Choice [m/c]: " _choice
-    _choice=$(echo "$_choice" | tr '[:upper:]' '[:lower:]')
-    case "$_choice" in
-      m) INSTALL_MODE="migrate"; break;;
-      c) INSTALL_MODE="clean";   break;;
-      *) echo "  Enter m or c.";;
-    esac
-  done
-
-  echo ""
-
-  # Backup always — before any changes
+  # Backup always, before any changes
   BACKUP_DIR="$HOME/.claude.backup.$(date +%Y%m%d%H%M%S)"
   cp -r "$CLAUDE_DIR" "$BACKUP_DIR"
   ok "Backed up existing setup to: $BACKUP_DIR"
@@ -289,26 +321,21 @@ if [ -d "$CLAUDE_DIR" ] && [ "$(ls -A "$CLAUDE_DIR" 2>/dev/null)" ]; then
   if [ "$INSTALL_MODE" = "clean" ]; then
     rm -rf "$CLAUDE_DIR"
     mkdir -p "$CLAUDE_DIR"
-    ok "Cleaned ~/.claude/ — starting fresh"
+    ok "Cleared existing setup — starting fresh"
     echo ""
   fi
 
-  if [ "$INSTALL_MODE" = "migrate" ]; then
-    # ── Migration analysis ───────────────────────────────────────────────────
+  # Advanced mode only: detailed migration analysis
+  if [ "$INSTALL_MODE" = "migrate" ] && [ "$SIMPLE_MODE" = false ]; then
     echo ""
     echo "  ── Migration Analysis ──"
     echo ""
-
-    STANDARD_SKILLS="ticket support spec arch dev qa start close draft weekly status learn sync save whiteboard setup-client pull-notes explore lens"
-
-    # Compare each standard skill: existing vs repo template
     echo "  Skill files:"
     SKILLS_USE_NEW=()
     SKILLS_MODIFIED=()
 
     if [ -d "$CLAUDE_DIR/commands" ] && [ -n "$DETECTED_PREFIX" ]; then
       for _skill in $STANDARD_SKILLS; do
-        # Existing installed file (prefixed)
         case "$_skill" in
           ticket|support|spec|arch|dev|qa)
             _existing_path="$CLAUDE_DIR/commands/${DETECTED_PREFIX}-${_skill}.md"
@@ -319,14 +346,11 @@ if [ -d "$CLAUDE_DIR" ] && [ "$(ls -A "$CLAUDE_DIR" 2>/dev/null)" ]; then
             _repo_path="$REPO_DIR/commands/${_skill}.md"
             ;;
         esac
-
         [ ! -f "$_existing_path" ] && continue
         [ ! -f "$_repo_path" ]    && continue
-
         _lines_existing=$(wc -l < "$_existing_path" | tr -d ' ')
         _lines_new=$(wc -l < "$_repo_path" | tr -d ' ')
         _diff=$(( _lines_new - _lines_existing ))
-
         if [ "$_diff" -gt 20 ]; then
           printf "    %-28s existing %s lines / new %s lines  → new has additions, use new\n" \
             "/$_skill" "$_lines_existing" "$_lines_new"
@@ -344,30 +368,6 @@ if [ -d "$CLAUDE_DIR" ] && [ "$(ls -A "$CLAUDE_DIR" 2>/dev/null)" ]; then
     fi
 
     echo ""
-
-    # Find custom skills (not in standard list)
-    if [ -d "$CLAUDE_DIR/commands" ]; then
-      for _f in "$CLAUDE_DIR/commands/"*.md; do
-        [ ! -f "$_f" ] && continue
-        _base=$(basename "$_f" .md)
-        _stripped=$(echo "$_base" | sed "s/^${DETECTED_PREFIX}-//")
-        _is_standard=false
-        for _s in $STANDARD_SKILLS; do
-          [ "$_stripped" = "$_s" ] && _is_standard=true && break
-        done
-        [ "$_is_standard" = false ] && CUSTOM_SKILLS+=("$_f")
-      done
-    fi
-
-    if [ "${#CUSTOM_SKILLS[@]}" -gt 0 ]; then
-      echo "  Custom skills (not in standard set — always kept):"
-      for _f in "${CUSTOM_SKILLS[@]}"; do
-        printf "    %s\n" "$(basename "$_f")"
-      done
-      echo ""
-    fi
-
-    # Check CLAUDE.md for custom content beyond the template
     echo "  CLAUDE.md:"
     if [ -f "$BACKUP_DIR/CLAUDE.md" ]; then
       _existing_lines=$(wc -l < "$BACKUP_DIR/CLAUDE.md" | tr -d ' ')
@@ -381,24 +381,18 @@ if [ -d "$CLAUDE_DIR" ] && [ "$(ls -A "$CLAUDE_DIR" 2>/dev/null)" ]; then
       fi
     fi
     echo ""
-
-    # Memory files
     _mem_count=$(find "$BACKUP_DIR/projects" -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
     echo "  Memory files:"
     printf "    %s feedback memory files found — all preserved.\n" "$_mem_count"
     echo ""
-
-    # Summary
     echo "  Migration plan:"
-    echo "    - All standard skills: install new versions (updated)"
+    echo "    - All standard skills: install new versions"
     [ "${#SKILLS_MODIFIED[@]}" -gt 0 ] && \
       echo "    - Modified skills: new installed, old saved to $BACKUP_DIR for manual review"
     [ "${#CUSTOM_SKILLS[@]}" -gt 0 ] && \
       echo "    - Custom skills: copied into new dotfiles/commands/custom/"
     echo "    - Memory files: copied to new memory location"
-    echo "    - Knowledge vault: detected path used as default (not recreated)"
     echo ""
-
     read -rp "  Proceed with this migration plan? [Y/n]: " _confirm
     echo ""
     if [[ "$_confirm" =~ ^[Nn]$ ]]; then
@@ -407,78 +401,127 @@ if [ -d "$CLAUDE_DIR" ] && [ "$(ls -A "$CLAUDE_DIR" 2>/dev/null)" ]; then
       exit 0
     fi
   fi
-fi
 
-# ── Step 1: Identity ─────────────────────────────────────────────────────────
-header "Step 1: Your Identity"
-echo ""
-dim "Written into CLAUDE.md so Claude knows your role and context."
+  # Custom skill detection (both modes)
+  if [ "$INSTALL_MODE" = "migrate" ] && [ -d "$CLAUDE_DIR/commands" ]; then
+    for _f in "$CLAUDE_DIR/commands/"*.md; do
+      [ ! -f "$_f" ] && continue
+      _base=$(basename "$_f" .md)
+      _stripped=$(echo "$_base" | sed "s/^${DETECTED_PREFIX:-dt}-//")
+      _is_standard=false
+      for _s in $STANDARD_SKILLS; do
+        [ "$_stripped" = "$_s" ] && _is_standard=true && break
+      done
+      [ "$_is_standard" = false ] && CUSTOM_SKILLS+=("$_f")
+    done
+
+    if [ "${#CUSTOM_SKILLS[@]}" -gt 0 ] && [ "$SIMPLE_MODE" = false ]; then
+      echo "  Custom skills (always kept):"
+      for _f in "${CUSTOM_SKILLS[@]}"; do
+        printf "    %s\n" "$(basename "$_f")"
+      done
+      echo ""
+    fi
+  fi
+fi  # end existing-setup detection
+
+# ── Step 1: Your Details ──────────────────────────────────────────────────────
+if [ "$SIMPLE_MODE" = true ]; then
+  header "Your Details"
+else
+  header "Step 1: Your Identity"
+  dim "Written into CLAUDE.md so Claude knows your role and context."
+fi
 echo ""
 
 GIT_NAME=$(git config user.name 2>/dev/null || echo "")
 GIT_EMAIL=$(git config user.email 2>/dev/null || echo "")
-
-# Use detected values as defaults when migrating
 _default_name="${DETECTED_NAME:-$GIT_NAME}"
-_default_prefix="${DETECTED_PREFIX:-dt}"
 
-USER_NAME=$(ask    "Full name"                         "$_default_name")
-USER_TITLE=$(ask   "Job title"                         "Data Integration Manager")
-USER_COMPANY=$(ask "Company"                           "")
-USER_DOMAIN=$(ask  "Domain (e.g. Health AI, FinTech)"  "Health AI")
-SKILL_PREFIX=$(ask "Skill prefix (e.g. 'ah' gives /ah-ticket, 'dt' gives /dt-ticket)" "$_default_prefix")
+USER_NAME=$(ask  "Your full name"    "$_default_name")
+while [ -z "$USER_NAME" ]; do
+  echo "  Name is required."
+  USER_NAME=$(ask "Your full name" "")
+done
+USER_TITLE=$(ask "Your job title"    "Data Integration Manager")
+USER_COMPANY=$(ask "Your company"   "")
+USER_DOMAIN=$(ask  "Your industry (e.g. Health AI, FinTech, Insurance)" "Health AI")
+
+if [ "$SIMPLE_MODE" = true ]; then
+  # Auto-generate prefix from name initials; don't expose the concept to the user
+  _auto_prefix=$(make_prefix "$USER_NAME")
+  [ -z "$_auto_prefix" ] && _auto_prefix="dt"
+  SKILL_PREFIX="${DETECTED_PREFIX:-$_auto_prefix}"
+else
+  _default_prefix="${DETECTED_PREFIX:-dt}"
+  SKILL_PREFIX=$(ask "Skill prefix (e.g. 'ah' gives /ah-ticket, 'dt' gives /dt-ticket)" "$_default_prefix")
+fi
+
 PREFIX_UPPER=$(echo "$SKILL_PREFIX" | tr '[:lower:]' '[:upper:]')
 
-# ── Step 2: Base folder setup ────────────────────────────────────────────────
-header "Step 2: Folder Setup"
-echo ""
-dim "Everything lives under one base folder, named by prefix."
-dim "Example: base 'dipen' + prefix 'dp' creates ~/Developer/dipen/dp-dotfiles, dp-knowledge, dp-scripts"
+# ── Step 2: Folder Setup ──────────────────────────────────────────────────────
+if [ "$SIMPLE_MODE" = false ]; then
+  header "Step 2: Folder Setup"
+  dim "Everything lives under one base folder."
+fi
 echo ""
 
 NAME_SLUG=$(echo "$USER_NAME" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
 DEFAULT_BASE="$HOME/Developer/${NAME_SLUG}"
 
-BASE_DIR=$(ask "Base folder path (e.g. ~/Developer/dipen)" "$DEFAULT_BASE")
-# Expand ~ manually in case the user typed it literally
-BASE_DIR="${BASE_DIR/#\~/$HOME}"
+if [ "$SIMPLE_MODE" = true ]; then
+  _default_vault="${DETECTED_VAULT:-${DEFAULT_BASE}/${SKILL_PREFIX}-knowledge}"
+  echo "  Your notes will be saved to:"
+  echo "    $_default_vault"
+  echo ""
+  read -rp "  Press Enter to use this, or type a different path: " _vault_input
+  if [ -n "$_vault_input" ]; then
+    _vault_input="${_vault_input/#\~/$HOME}"
+    VAULT_DIR="$_vault_input"
+  else
+    VAULT_DIR="$_default_vault"
+  fi
+  # All other dirs derive from DEFAULT_BASE so they stay consistent
+  BASE_DIR="$DEFAULT_BASE"
+  DOTFILES_DIR="${BASE_DIR}/${SKILL_PREFIX}-dotfiles"
+  SCRIPTS_DIR="${BASE_DIR}/${SKILL_PREFIX}-scripts"
+  MEETINGS_DIR="${VAULT_DIR}/06-meetings-summaries"
+  CODE_DIR="${BASE_DIR}/${SKILL_PREFIX}-code"
+  DEV_DIR="${BASE_DIR}/${SKILL_PREFIX}-dev"
+else
+  BASE_DIR=$(ask "Base folder path (e.g. ~/Developer/yourname)" "$DEFAULT_BASE")
+  BASE_DIR="${BASE_DIR/#\~/$HOME}"
+  DOTFILES_DIR="${BASE_DIR}/${SKILL_PREFIX}-dotfiles"
+  VAULT_DIR="${DETECTED_VAULT:-${BASE_DIR}/${SKILL_PREFIX}-knowledge}"
+  SCRIPTS_DIR="${BASE_DIR}/${SKILL_PREFIX}-scripts"
+  MEETINGS_DIR="${VAULT_DIR}/06-meetings-summaries"
+  CODE_DIR="${BASE_DIR}/${SKILL_PREFIX}-code"
+  DEV_DIR="${BASE_DIR}/${SKILL_PREFIX}-dev"
+  echo ""
+  ok "Base:      $BASE_DIR"
+  ok "Dotfiles:  $DOTFILES_DIR"
+  ok "Knowledge: $VAULT_DIR"
+  ok "Scripts:   $SCRIPTS_DIR"
+  ok "Meetings:  $MEETINGS_DIR (inside knowledge)"
+  ok "Code:      $CODE_DIR  (read-only source)"
+  ok "Dev:       $DEV_DIR   (active checkouts)"
+  echo ""
+  if [ "$REPO_DIR" != "$DOTFILES_DIR" ]; then
+    note "This repo is at: $REPO_DIR"
+    note "Expected at:     $DOTFILES_DIR"
+    note "Consider moving: mv \"$REPO_DIR\" \"$DOTFILES_DIR\""
+    echo ""
+  fi
+fi
 
-# All paths derive from base + prefix
-DOTFILES_DIR="${BASE_DIR}/${SKILL_PREFIX}-dotfiles"
-# When migrating, default vault to the detected existing path so we don't recreate it
-VAULT_DIR="${DETECTED_VAULT:-${BASE_DIR}/${SKILL_PREFIX}-knowledge}"
-SCRIPTS_DIR="${BASE_DIR}/${SKILL_PREFIX}-scripts"
-MEETINGS_DIR="${VAULT_DIR}/06-meetings-summaries"
-CODE_DIR="${BASE_DIR}/${SKILL_PREFIX}-code"
-DEV_DIR="${BASE_DIR}/${SKILL_PREFIX}-dev"
+mkdir -p "$BASE_DIR" "$SCRIPTS_DIR"
 
-echo ""
-ok "Base:      $BASE_DIR"
-ok "Dotfiles:  $DOTFILES_DIR"
-ok "Knowledge: $VAULT_DIR"
-ok "Scripts:   $SCRIPTS_DIR"
-ok "Meetings:  $MEETINGS_DIR (inside knowledge)"
-ok "Code:      $CODE_DIR  (read-only source)"
-ok "Dev:       $DEV_DIR   (active checkouts)"
-echo ""
-
-# Warn if the repo is not already in the expected dotfiles location
-if [ "$REPO_DIR" != "$DOTFILES_DIR" ]; then
-  note "This repo is at: $REPO_DIR"
-  note "Expected at:     $DOTFILES_DIR"
-  note "Consider moving it: mv \"$REPO_DIR\" \"$DOTFILES_DIR\""
+# ── Step 3: Create Folder Structure ──────────────────────────────────────────
+if [ "$SIMPLE_MODE" = false ]; then
+  header "Step 3: Creating Folders"
   echo ""
 fi
 
-mkdir -p "$BASE_DIR"
-mkdir -p "$SCRIPTS_DIR"
-
-# ── Step 3: Create folder structure ──────────────────────────────────────────
-header "Step 3: Creating Folders"
-echo ""
-
-# Vault — not git tracked, local only
-echo "  ${SKILL_PREFIX}-knowledge/ (Obsidian vault, local only — not git tracked)"
 VAULT_DIRS=(
   "00-landing"
   "01-system-map/clients"
@@ -501,26 +544,29 @@ VAULT_DIRS=(
 mkdir -p "$VAULT_DIR"
 for dir in "${VAULT_DIRS[@]}"; do
   mkdir -p "$VAULT_DIR/$dir"
-  ok "$dir"
+  [ "$SIMPLE_MODE" = false ] && ok "$dir"
 done
+[ "$SIMPLE_MODE" = true ] && ok "Notes folder ready: $VAULT_DIR"
 
-echo ""
+mkdir -p "$CODE_DIR" "$DEV_DIR"
 
-# Scripts — ask about git tracking
-echo "  ${SKILL_PREFIX}-scripts/ (reusable scripts)"
-SCRIPTS_GIT=""
-read -rp "  Track scripts with git? [y/N]: " SCRIPTS_GIT
-echo ""
-
-if [[ "$SCRIPTS_GIT" =~ ^[Yy]$ ]]; then
-  if [ ! -d "$SCRIPTS_DIR/.git" ]; then
-    git -C "$SCRIPTS_DIR" init
-    ok "Git initialized in ${SKILL_PREFIX}-scripts"
-  else
-    ok "Git already initialized in ${SKILL_PREFIX}-scripts"
-  fi
-
-  cat > "$SCRIPTS_DIR/.gitignore" << 'GITIGNORE'
+# Advanced only: optional scripts git tracking and read-only repo sync
+if [ "$SIMPLE_MODE" = false ]; then
+  echo ""
+  echo "  ${SKILL_PREFIX}-scripts/ (reusable scripts)"
+  SCRIPTS_GIT=""
+  read -rp "  Track scripts with git? [y/N]: " SCRIPTS_GIT
+  echo ""
+  if [[ "$SCRIPTS_GIT" =~ ^[Yy]$ ]]; then
+    if ! command -v git &>/dev/null; then
+      note "git not found — skipping scripts git tracking. Install git and re-run install.sh."
+    elif [ ! -d "$SCRIPTS_DIR/.git" ]; then
+      git -C "$SCRIPTS_DIR" init
+      ok "Git initialized in ${SKILL_PREFIX}-scripts"
+    else
+      ok "Git already initialized in ${SKILL_PREFIX}-scripts"
+    fi
+    cat > "$SCRIPTS_DIR/.gitignore" << 'GITIGNORE'
 __pycache__/
 *.pyc
 *.pyo
@@ -530,75 +576,66 @@ __pycache__/
 *.credentials
 *.key
 GITIGNORE
-
-  ok "Created .gitignore for scripts"
-
-  SCRIPTS_REMOTE=$(ask "  GitHub repo URL for scripts (Enter to skip)" "")
-  if [ -n "$SCRIPTS_REMOTE" ]; then
-    if git -C "$SCRIPTS_DIR" remote get-url origin &>/dev/null; then
-      git -C "$SCRIPTS_DIR" remote set-url origin "$SCRIPTS_REMOTE"
-    else
-      git -C "$SCRIPTS_DIR" remote add origin "$SCRIPTS_REMOTE"
+    ok "Created .gitignore for scripts"
+    SCRIPTS_REMOTE=$(ask "  GitHub repo URL for scripts (Enter to skip)" "")
+    if [ -n "$SCRIPTS_REMOTE" ]; then
+      if git -C "$SCRIPTS_DIR" remote get-url origin &>/dev/null; then
+        git -C "$SCRIPTS_DIR" remote set-url origin "$SCRIPTS_REMOTE"
+      else
+        git -C "$SCRIPTS_DIR" remote add origin "$SCRIPTS_REMOTE"
+      fi
+      ok "Remote set: $SCRIPTS_REMOTE"
     fi
-    ok "Remote set: $SCRIPTS_REMOTE"
+  else
+    ok "Scripts folder created (no git tracking)"
   fi
-else
-  ok "Scripts folder created (no git tracking)"
-fi
 
-# ── Git working directories ──────────────────────────────────────────────────
-echo ""
-echo "  Developer directories (git workflow)"
-echo ""
-info "  Two directories keep read-only source truth separate from active work."
-info "  ${SKILL_PREFIX}-code/  →  read-only. Claude reads here for design validation. Never written to."
-info "  ${SKILL_PREFIX}-dev/   →  active checkouts. Feature branches live here. PRs go back to main."
-echo ""
-
-mkdir -p "$CODE_DIR"
-mkdir -p "$DEV_DIR"
-ok "Created: ${SKILL_PREFIX}-code/  (read-only source)"
-ok "Created: ${SKILL_PREFIX}-dev/   (active checkouts)"
-echo ""
-
-echo "  Which repos do you want synced into ${SKILL_PREFIX}-code/ (read-only)?"
-dim "  Enter full GitHub clone URLs, one per line. Press Enter on a blank line when done."
-dim "  These stay at latest main. You never work directly in ${SKILL_PREFIX}-code/."
-echo ""
-
-SYNC_REPOS=()
-while true; do
-  read -rp "  Repo URL (or Enter to finish): " _repo_url
-  [ -z "$_repo_url" ] && break
-  SYNC_REPOS+=("$_repo_url")
-done
-
-if [ "${#SYNC_REPOS[@]}" -gt 0 ]; then
   echo ""
-  note "Cloning repos into ${CODE_DIR}..."
-  for _url in "${SYNC_REPOS[@]}"; do
-    _repo_name=$(basename "$_url" .git)
-    if [ -d "${CODE_DIR}/${_repo_name}/.git" ]; then
-      git -C "${CODE_DIR}/${_repo_name}" pull --quiet
-      ok "Updated: $_repo_name"
-    else
-      git clone --quiet "$_url" "${CODE_DIR}/${_repo_name}"
-      ok "Cloned: $_repo_name"
-    fi
+  echo "  ${SKILL_PREFIX}-developer directories (git workflow)"
+  echo ""
+  info "  ${SKILL_PREFIX}-code/  →  read-only. Claude reads here for design validation."
+  info "  ${SKILL_PREFIX}-dev/   →  active checkouts. Feature branches live here."
+  echo ""
+  echo "  Which repos do you want synced into ${SKILL_PREFIX}-code/ (read-only)?"
+  dim "  Enter full GitHub clone URLs, one per line. Press Enter on a blank line when done."
+  echo ""
+  SYNC_REPOS=()
+  while true; do
+    read -rp "  Repo URL (or Enter to finish): " _repo_url
+    [ -z "$_repo_url" ] && break
+    SYNC_REPOS+=("$_repo_url")
   done
-else
-  note "No repos cloned. Add later: git clone <url> ${CODE_DIR}/<repo-name>"
+  if [ "${#SYNC_REPOS[@]}" -gt 0 ]; then
+    if ! command -v git &>/dev/null; then
+      note "git not found — skipping repo clone. Install git and re-run install.sh."
+    fi
+    echo ""
+    note "Cloning repos into ${CODE_DIR}..."
+    for _url in "${SYNC_REPOS[@]}"; do
+      _repo_name=$(basename "$_url" .git)
+      if [ -d "${CODE_DIR}/${_repo_name}/.git" ]; then
+        git -C "${CODE_DIR}/${_repo_name}" pull --quiet
+        ok "Updated: $_repo_name"
+      else
+        git clone --quiet "$_url" "${CODE_DIR}/${_repo_name}"
+        ok "Cloned: $_repo_name"
+      fi
+    done
+  else
+    note "No repos cloned. Add later: git clone <url> ${CODE_DIR}/<repo-name>"
+  fi
 fi
 
-# ── Step 4: Install Claude Code config ───────────────────────────────────────
-header "Step 4: Installing Claude Code Config"
-echo ""
+# ── Step 4: Install Claude Code Config ───────────────────────────────────────
+if [ "$SIMPLE_MODE" = false ]; then
+  header "Step 4: Installing Claude Code Config"
+  echo ""
+fi
 
 SLUG=$(echo "$HOME" | sed 's|/|-|g')
 MEMORY_TARGET="$CLAUDE_DIR/projects/$SLUG/memory"
 
-mkdir -p "$CLAUDE_DIR"
-mkdir -p "$(dirname "$MEMORY_TARGET")"
+mkdir -p "$CLAUDE_DIR" "$(dirname "$MEMORY_TARGET")"
 
 backup "$CLAUDE_DIR/settings.json"
 sed \
@@ -606,15 +643,14 @@ sed \
   -e "s|QH_MEETINGS|${PREFIX_UPPER}_MEETINGS|g" \
   -e "s|QH_SCRIPTS|${PREFIX_UPPER}_SCRIPTS|g" \
   "$REPO_DIR/settings.json" > "$CLAUDE_DIR/settings.json"
-ok "Written: settings.json (env vars substituted for prefix: $SKILL_PREFIX)"
+ok "Settings configured"
 
-symlink "$REPO_DIR/memory"        "$MEMORY_TARGET"
+symlink "$REPO_DIR/memory" "$MEMORY_TARGET"
 
-# Commands: copy with prefix + name substitution so slash commands use the chosen prefix
+# Install commands with prefix substitution
 mkdir -p "$CLAUDE_DIR/commands"
 for src_file in "$REPO_DIR/commands/"*.md; do
   base=$(basename "$src_file")
-  # Prefix the ticket-chain skills with the chosen prefix
   case "$base" in
     ticket.md|support.md|spec.md|arch.md|dev.md|qa.md)
       dest_name="${SKILL_PREFIX}-${base}"
@@ -637,12 +673,13 @@ for src_file in "$REPO_DIR/commands/"*.md; do
     -e "s|QH_SCRIPTS|${PREFIX_UPPER}_SCRIPTS|g" \
     -e "s|qh-code-temp|${SKILL_PREFIX}-code-temp|g" \
     -e "s|qh-code/|${SKILL_PREFIX}-code/|g" \
-    -e "s|{NAME}|${USER_NAME}|g" \
+    -e "s|{NAME}|${USER_NAME_ESC}|g" \
     "$src_file" > "$CLAUDE_DIR/commands/$dest_name"
-  ok "Installed: $dest_name"
+  [ "$SIMPLE_MODE" = false ] && ok "Installed: $dest_name"
 done
+[ "$SIMPLE_MODE" = true ] && ok "Commands installed"
 
-# Cursor rules: deploy to vault with prefix substitution
+# Cursor rules
 if [ -d "$REPO_DIR/cursor-rules" ]; then
   CURSOR_RULES_DEST="$VAULT_DIR/.cursor/rules"
   mkdir -p "$CURSOR_RULES_DEST"
@@ -662,19 +699,18 @@ if [ -d "$REPO_DIR/cursor-rules" ]; then
       -e "s|QH_SCRIPTS|${PREFIX_UPPER}_SCRIPTS|g" \
       -e "s|qh-code-temp|${SKILL_PREFIX}-code-temp|g" \
       -e "s|qh-code/|${SKILL_PREFIX}-code/|g" \
-      -e "s|\[YOUR NAME\]|${USER_NAME}|g" \
-      -e "s|\[YOUR TITLE\]|${USER_TITLE}|g" \
-      -e "s|\[YOUR COMPANY\]|${USER_COMPANY}|g" \
+      -e "s|\[YOUR NAME\]|${USER_NAME_ESC}|g" \
+      -e "s|\[YOUR TITLE\]|${USER_TITLE_ESC}|g" \
+      -e "s|\[YOUR COMPANY\]|${USER_COMPANY_ESC}|g" \
       "$src_file" > "$CURSOR_RULES_DEST/$base"
-    ok "Cursor rule: $base"
+    [ "$SIMPLE_MODE" = false ] && ok "Cursor rule: $base"
   done
 fi
 
-# Copy custom skills from migration into dotfiles/commands/custom/
+# Preserve custom skills from migration
 if [ "$INSTALL_MODE" = "migrate" ] && [ "${#CUSTOM_SKILLS[@]}" -gt 0 ]; then
   CUSTOM_DEST="$REPO_DIR/commands/custom"
-  mkdir -p "$CUSTOM_DEST"
-  mkdir -p "$CLAUDE_DIR/commands"
+  mkdir -p "$CUSTOM_DEST" "$CLAUDE_DIR/commands"
   for _cf in "${CUSTOM_SKILLS[@]}"; do
     _cfname=$(basename "$_cf")
     cp "$_cf" "$CUSTOM_DEST/$_cfname"
@@ -683,29 +719,33 @@ if [ "$INSTALL_MODE" = "migrate" ] && [ "${#CUSTOM_SKILLS[@]}" -gt 0 ]; then
   done
 fi
 
-# Copy memory files from migration backup to new memory location
+# Carry over memory files from migration
 if [ "$INSTALL_MODE" = "migrate" ] && [ -n "$BACKUP_DIR" ]; then
-  _mem_src=$(find "$BACKUP_DIR/projects" -name "*.md" 2>/dev/null | head -1)
+  _mem_src=$(find "$BACKUP_DIR/projects" -name "*.md" 2>/dev/null | head -1 || echo "")
   if [ -n "$_mem_src" ]; then
     _mem_src_dir=$(dirname "$_mem_src")
     mkdir -p "$REPO_DIR/memory"
     cp "$_mem_src_dir"/*.md "$REPO_DIR/memory/" 2>/dev/null || true
-    ok "Memory files copied to new location"
+    ok "Notes and memory preserved"
   fi
 fi
 
-# ── Step 5: Write CLAUDE.md with identity ────────────────────────────────────
-header "Step 5: Writing CLAUDE.md"
-echo ""
+# ── Step 5: Write CLAUDE.md ───────────────────────────────────────────────────
+# Escape user-supplied strings before embedding in sed replacement positions.
+# & means "matched text" in sed replacements; | closes our delimiter; \ is the escape char.
+USER_NAME_ESC=$(_sed_escape "$USER_NAME")
+USER_TITLE_ESC=$(_sed_escape "$USER_TITLE")
+USER_COMPANY_ESC=$(_sed_escape "$USER_COMPANY")
+USER_DOMAIN_ESC=$(_sed_escape "$USER_DOMAIN")
 
 CLAUDE_DEST="$CLAUDE_DIR/CLAUDE.md"
 backup "$CLAUDE_DEST"
 
 sed \
-  -e "s|\[YOUR NAME\]|${USER_NAME}|g" \
-  -e "s|\[YOUR TITLE\]|${USER_TITLE}|g" \
-  -e "s|\[YOUR COMPANY\]|${USER_COMPANY}|g" \
-  -e "s|Health AI\. PHI/PII rules apply at all times, no exceptions\.|${USER_DOMAIN}. PHI/PII rules apply at all times, no exceptions.|g" \
+  -e "s|\[YOUR NAME\]|${USER_NAME_ESC}|g" \
+  -e "s|\[YOUR TITLE\]|${USER_TITLE_ESC}|g" \
+  -e "s|\[YOUR COMPANY\]|${USER_COMPANY_ESC}|g" \
+  -e "s|Health AI\. PHI/PII rules apply at all times, no exceptions\.|${USER_DOMAIN_ESC}. PHI/PII rules apply at all times, no exceptions.|g" \
   -e "s|QH_KNOWLEDGE|${PREFIX_UPPER}_KNOWLEDGE|g" \
   -e "s|QH_MEETINGS|${PREFIX_UPPER}_MEETINGS|g" \
   -e "s|QH_SCRIPTS|${PREFIX_UPPER}_SCRIPTS|g" \
@@ -717,21 +757,25 @@ sed \
   -e "s|/{prefix}-qa|/${SKILL_PREFIX}-qa|g" \
   "$REPO_DIR/CLAUDE.md" > "$CLAUDE_DEST"
 
-ok "Written: $CLAUDE_DEST"
+ok "Profile written for $USER_NAME"
 
-# ── Step 6: Service connections ───────────────────────────────────────────────
-header "Step 6: Service Connections"
-echo ""
-dim "For each service, choose MCP (browser OAuth) or API token or skip."
-dim "MCP is easier if you do not have admin access to create tokens."
-dim "API token is faster if you already have a token ready."
+# ── Step 6: Service Connections ───────────────────────────────────────────────
+if [ "$SIMPLE_MODE" = true ]; then
+  header "Connect Your Services"
+  echo ""
+  echo "  Connect the tools you use every day."
+  echo "  Browser sign-in is easiest — just click through the login page that opens."
+  echo "  You can skip any service and add it later by re-running install.sh."
+else
+  header "Step 6: Service Connections"
+  echo ""
+  dim "For each service, choose browser sign-in, paste an API key, or skip."
+fi
 
-# Track choices for settings.local.json generation
 ATLASSIAN_METHOD="skip"
 SLACK_METHOD="skip"
 NOTION_METHOD="skip"
 
-# API token values (only used when method = api)
 ATLASSIAN_URL=""
 ATLASSIAN_USERNAME=""
 ATLASSIAN_API_TOKEN=""
@@ -739,43 +783,78 @@ SLACK_BOT_TOKEN=""
 SLACK_TEAM_ID=""
 NOTION_TOKEN=""
 
-# ── Atlassian ────────────────────────────────────────────────────────────────
+# ── Jira + Confluence ─────────────────────────────────────────────────────────
 echo ""
-echo "  ── Atlassian (Jira + Confluence) ──"
-dim "  MCP: browser OAuth on first use, no token needed."
-dim "  API: requires an Atlassian API token from id.atlassian.com."
+echo "  ── Jira and Confluence ──"
+if [ "$SIMPLE_MODE" = true ]; then
+  echo "  Sign in to read your tickets and look up company docs from inside Claude."
+else
+  dim "  Browser sign-in: no key needed."
+  dim "  API key: create one at id.atlassian.com/manage-profile/security/api-tokens"
+fi
 
-choose_connection "Atlassian" "yes"
+choose_connection "Jira and Confluence" "yes"
 ATLASSIAN_METHOD="$CONNECTION_CHOICE"
 
 if [ "$ATLASSIAN_METHOD" = "api" ]; then
   echo ""
-  ATLASSIAN_URL=$(ask "  Atlassian base URL (e.g. https://your-org.atlassian.net)" "")
-  ATLASSIAN_USERNAME=$(ask "  Atlassian email" "$GIT_EMAIL")
-  ATLASSIAN_API_TOKEN=$(ask_secret "  API token" "atlassian-api-token")
+  ATLASSIAN_URL=$(ask "  Your Atlassian URL (e.g. https://yourcompany.atlassian.net)" "")
+  ATLASSIAN_USERNAME=$(ask "  Your Atlassian login email" "$GIT_EMAIL")
+  ATLASSIAN_API_TOKEN=$(ask_secret "  API key (from id.atlassian.com/manage-profile/security/api-tokens)" "atlassian-api-token")
   echo ""
   cred_store "atlassian-url"       "$ATLASSIAN_URL"
   cred_store "atlassian-username"  "$ATLASSIAN_USERNAME"
   cred_store "atlassian-api-token" "$ATLASSIAN_API_TOKEN"
 elif [ "$ATLASSIAN_METHOD" = "mcp" ]; then
-  ok "Atlassian: MCP / OAuth. Browser will open on first Claude Code use."
+  ok "Jira and Confluence: a login page will open the first time Claude needs them."
 else
-  note "Atlassian: skipped. Re-run install.sh to add later."
+  note "Jira and Confluence: skipped. Re-run install.sh to add later."
 fi
 
-# ── Slack ────────────────────────────────────────────────────────────────────
+# ── Notion ────────────────────────────────────────────────────────────────────
+echo ""
+echo "  ── Notion ──"
+if [ "$SIMPLE_MODE" = true ]; then
+  echo "  Sign in to let Claude read and reference your Notion pages."
+else
+  dim "  Browser sign-in: no key needed."
+  dim "  API key: create one at notion.so/my-integrations"
+fi
+
+choose_connection "Notion" "yes"
+NOTION_METHOD="$CONNECTION_CHOICE"
+
+if [ "$NOTION_METHOD" = "api" ]; then
+  echo ""
+  NOTION_TOKEN=$(ask_secret "  Notion integration key (from notion.so/my-integrations, starts with secret_)" "notion-token")
+  echo ""
+  cred_store "notion-token" "$NOTION_TOKEN"
+elif [ "$NOTION_METHOD" = "mcp" ]; then
+  ok "Notion: a login page will open the first time Claude needs it."
+else
+  note "Notion: skipped. Re-run install.sh to add later."
+fi
+
+# ── Slack ─────────────────────────────────────────────────────────────────────
 echo ""
 echo "  ── Slack ──"
-dim "  Requires a Slack Bot token. Creating one needs workspace admin access."
-dim "  If your company restricts this, choose s to skip."
+if [ "$SIMPLE_MODE" = true ]; then
+  echo "  Lets Claude search your Slack messages for context."
+  echo "  Requires a bot key from your Slack admin. No browser sign-in option."
+  echo "  Skip this if you don't have one — ask your Slack admin for help."
+else
+  dim "  Requires a bot token (xoxb-...) from your Slack workspace admin."
+  dim "  No browser sign-in option: Slack does not provide one."
+  dim "  Admin guide: api.slack.com/apps"
+fi
 
 choose_connection "Slack" "no"
 SLACK_METHOD="$CONNECTION_CHOICE"
 
 if [ "$SLACK_METHOD" = "api" ]; then
   echo ""
-  SLACK_BOT_TOKEN=$(ask_secret "  Slack Bot Token (xoxb-...)" "slack-bot-token")
-  SLACK_TEAM_ID=$(ask          "  Slack Team ID (T...)"       "")
+  SLACK_BOT_TOKEN=$(ask_secret "  Slack Bot Token (starts with xoxb-)" "slack-bot-token")
+  SLACK_TEAM_ID=$(ask          "  Slack Team ID (the T... code from your Slack URL)" "")
   echo ""
   cred_store "slack-bot-token" "$SLACK_BOT_TOKEN"
   cred_store "slack-team-id"   "$SLACK_TEAM_ID"
@@ -783,27 +862,11 @@ else
   note "Slack: skipped. Re-run install.sh to add later."
 fi
 
-# ── Notion ───────────────────────────────────────────────────────────────────
-echo ""
-echo "  ── Notion (optional) ──"
-dim "  MCP: browser OAuth on first use, no token needed."
-dim "  API: requires an integration token from notion.so/my-integrations."
-
-choose_connection "Notion" "yes"
-NOTION_METHOD="$CONNECTION_CHOICE"
-
-if [ "$NOTION_METHOD" = "api" ]; then
+# ── Credentials loader ────────────────────────────────────────────────────────
+if [ "$SIMPLE_MODE" = false ]; then
+  header "Step 7: Credentials Loader"
   echo ""
-  NOTION_TOKEN=$(ask_secret "  Notion token (secret_...)" "notion-token")
-  echo ""
-  cred_store "notion-token" "$NOTION_TOKEN"
-else
-  note "Notion: skipped. Re-run install.sh to add later."
 fi
-
-# ── Step 7: Generate credentials.sh ─────────────────────────────────────────
-header "Step 7: Credentials Loader"
-echo ""
 
 cat > "$CREDS_SCRIPT" << 'CREDS'
 #!/usr/bin/env bash
@@ -855,17 +918,16 @@ unset _ATL_URL _ATL_USER _ATL_TOKEN _SLACK_BOT _SLACK_TEAM _NOTION _OS _KC
 CREDS
 
 chmod +x "$CREDS_SCRIPT"
-ok "Written: $CREDS_SCRIPT"
-dim "Reads from OS credential store at runtime. No tokens stored in the file."
+ok "Credentials configured (tokens stored in your system keychain, not in files)"
 
-# ── Step 8: Write settings.local.json ────────────────────────────────────────
-header "Step 8: MCP Server Config"
-echo ""
+# ── MCP Server Config ─────────────────────────────────────────────────────────
+if [ "$SIMPLE_MODE" = false ]; then
+  header "Step 8: MCP Server Config"
+  echo ""
+fi
 
-# Build MCP server JSON blocks based on chosen methods
 MCP_SERVERS=""
 
-# Atlassian block
 if [ "$ATLASSIAN_METHOD" = "mcp" ]; then
   MCP_SERVERS="${MCP_SERVERS}
     \"atlassian\": {
@@ -880,16 +942,6 @@ elif [ "$ATLASSIAN_METHOD" = "api" ]; then
     },"
 fi
 
-# Slack block (API only)
-if [ "$SLACK_METHOD" = "api" ]; then
-  MCP_SERVERS="${MCP_SERVERS}
-    \"slack\": {
-      \"command\": \"/bin/bash\",
-      \"args\": [\"-c\", \"source \\\"\\$HOME/.claude/credentials.sh\\\" 2>/dev/null; exec npx -y @modelcontextprotocol/server-slack\"]
-    },"
-fi
-
-# Notion block
 if [ "$NOTION_METHOD" = "mcp" ]; then
   MCP_SERVERS="${MCP_SERVERS}
     \"notion\": {
@@ -904,7 +956,14 @@ elif [ "$NOTION_METHOD" = "api" ]; then
     },"
 fi
 
-# Strip trailing comma from last server entry
+if [ "$SLACK_METHOD" = "api" ]; then
+  MCP_SERVERS="${MCP_SERVERS}
+    \"slack\": {
+      \"command\": \"/bin/bash\",
+      \"args\": [\"-c\", \"source \\\"\\$HOME/.claude/credentials.sh\\\" 2>/dev/null; exec npx -y @modelcontextprotocol/server-slack\"]
+    },"
+fi
+
 MCP_SERVERS="${MCP_SERVERS%,}"
 
 if [ -n "$MCP_SERVERS" ]; then
@@ -914,20 +973,20 @@ if [ -n "$MCP_SERVERS" ]; then
   }
 }
 MCPJSON
-  ok "Written: settings.local.json"
-  dim "MCP servers configured based on your connection choices."
 else
   cat > "$REPO_DIR/settings.local.json" << 'MCPJSON'
 {
   "mcpServers": {}
 }
 MCPJSON
-  ok "Written: settings.local.json (no services configured — add via re-run)"
 fi
+ok "Service connections saved"
 
-# ── Step 9: Shell profile ─────────────────────────────────────────────────────
-header "Step 9: Shell Profile"
-echo ""
+# ── Shell Profile ─────────────────────────────────────────────────────────────
+if [ "$SIMPLE_MODE" = false ]; then
+  header "Step 9: Shell Profile"
+  echo ""
+fi
 
 if [ -f "$HOME/.zshrc" ]; then
   SHELL_PROFILE="$HOME/.zshrc"
@@ -936,9 +995,6 @@ elif [ -f "$HOME/.bashrc" ]; then
 else
   SHELL_PROFILE="$HOME/.profile"
 fi
-
-note "Profile: $SHELL_PROFILE"
-echo ""
 
 ENV_BLOCK="
 # Arbiter (prefix: ${SKILL_PREFIX})
@@ -951,96 +1007,113 @@ export CLAUDE_DOTFILES=\"${REPO_DIR}\"
 "
 
 if grep -q "CLAUDE_DOTFILES" "$SHELL_PROFILE" 2>/dev/null; then
-  ok "Env block already present in $SHELL_PROFILE — skipped"
-  note "To update paths, edit $SHELL_PROFILE and run: source $SHELL_PROFILE"
+  ok "Shell profile already configured"
+  if [ "$SIMPLE_MODE" = true ]; then
+    note "If you changed your notes folder, update the path in $SHELL_PROFILE and reload your terminal."
+  else
+    note "To update paths, edit $SHELL_PROFILE and run: source $SHELL_PROFILE"
+  fi
 else
   printf '%s\n' "$ENV_BLOCK" >> "$SHELL_PROFILE"
-  ok "Added env vars and credentials loader"
+  ok "Shell profile updated: $SHELL_PROFILE"
 fi
 
-# ── Step 10: RAG Index Setup ─────────────────────────────────────────────────
-header "Step 10: RAG Index Setup"
-echo ""
-dim "Installs Python dependencies for vault search (chromadb, sentence-transformers)"
-dim "and builds the initial index. Re-running is safe: only changed files are re-indexed."
-echo ""
+# ── Vault Search Index ────────────────────────────────────────────────────────
+DO_RAG=false
 
-RAG_SKIP=false
-
-if ! command -v python3 &>/dev/null; then
-  note "python3 not found — skipping RAG setup. Install Python 3.9+ and re-run install.sh."
-  RAG_SKIP=true
-fi
-
-if [ "$RAG_SKIP" = false ]; then
-  note "Installing Python dependencies (this may take a minute)..."
-  python3 -m pip install --quiet chromadb sentence-transformers 2>&1 | tail -2
-  ok "Dependencies installed: chromadb, sentence-transformers"
-
+if [ "$SIMPLE_MODE" = true ]; then
   echo ""
-  note "Building initial vault index..."
-  dim "  Model: all-MiniLM-L6-v2 (downloaded on first run, ~90 MB)"
-  dim "  Index: ${VAULT_DIR}/.rag_index"
+  echo "  ── Vault Search (optional) ──"
+  echo "  Lets Claude automatically search your notes when you ask questions."
+  echo "  Downloads a small AI model (~90 MB) on first run."
   echo ""
+  read -rp "  Set this up now? [y/N]: " _rag_input
+  [[ "${_rag_input:-n}" =~ ^[Yy]$ ]] && DO_RAG=true
+else
+  header "Step 10: Vault Search Index"
+  echo ""
+  dim "Installs Python deps (chromadb, sentence-transformers) and builds the initial index."
+  dim "Re-running is safe: only changed files are re-indexed."
+  echo ""
+  DO_RAG=true
+fi
 
-  python3 "$REPO_DIR/rag/build_index.py" \
-    --dir "$VAULT_DIR" \
-    --index "$VAULT_DIR/.rag_index" \
-    --full
-
-  ok "Index built: ${VAULT_DIR}/.rag_index"
-  dim "vault_search_hook.sh will use this index on every prompt."
-  dim "Re-index after adding docs: python3 $REPO_DIR/rag/build_index.py --dir $VAULT_DIR --index $VAULT_DIR/.rag_index"
+if [ "$DO_RAG" = true ]; then
+  if ! command -v python3 &>/dev/null; then
+    note "Python 3 not found — skipping vault search setup. Install Python 3.9+ and re-run install.sh."
+  else
+    note "Installing search dependencies (this may take a minute)..."
+    # Wrap in if so set -e / pipefail don't kill the install on pip failure
+    if python3 -m pip install --quiet chromadb sentence-transformers 2>&1 | tail -2; then
+      ok "Search dependencies installed"
+      echo ""
+      note "Building search index..."
+      dim "  Model: all-MiniLM-L6-v2 (~90 MB, downloaded once)"
+      dim "  Index: ${VAULT_DIR}/.rag_index"
+      echo ""
+      python3 "$REPO_DIR/rag/build_index.py" \
+        --dir "$VAULT_DIR" \
+        --index "$VAULT_DIR/.rag_index" \
+        --full \
+        && ok "Search index built — Claude will search your notes automatically" \
+        || note "Index build failed — re-run install.sh after fixing Python to retry."
+    else
+      note "Could not install search dependencies — skipping vault search."
+      note "Fix Python / pip and re-run install.sh to add it later."
+    fi
+  fi
 fi
 
 echo ""
-note "Installing git pre-commit hook (blocks accidental token commits)..."
-note "Run this in each repo you want protected:"
-dim "  cp \"$REPO_DIR/hooks/pre-commit-secrets\" <repo>/.git/hooks/pre-commit && chmod +x <repo>/.git/hooks/pre-commit"
-echo ""
+if [ "$SIMPLE_MODE" = false ]; then
+  note "Pre-commit secret protection hook:"
+  dim "  Run in each repo: cp \"$REPO_DIR/hooks/pre-commit-secrets\" <repo>/.git/hooks/pre-commit && chmod +x <repo>/.git/hooks/pre-commit"
+  echo ""
+fi
 
 # ════════════════════════════════════════════════════════════════════════════
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  Done."
+echo "  You're all set."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-printf "  %-14s %s\n" "Name:"      "$USER_NAME"
-printf "  %-14s %s\n" "Title:"     "$USER_TITLE"
-printf "  %-14s %s\n" "Company:"   "$USER_COMPANY"
-printf "  %-14s %s\n" "Prefix:"    "$SKILL_PREFIX"
+printf "  %-20s %s\n" "Name:"    "$USER_NAME"
+printf "  %-20s %s\n" "Company:" "$USER_COMPANY"
+printf "  %-20s %s\n" "Notes:"   "$VAULT_DIR"
 echo ""
-echo "  Folder layout:"
-printf "  %-14s %s\n" "Base:"      "$BASE_DIR"
-printf "  %-14s %s\n" "Dotfiles:"  "${BASE_DIR}/${SKILL_PREFIX}-dotfiles  (this repo)"
-printf "  %-14s %s\n" "Knowledge:" "$VAULT_DIR  (local only)"
-printf "  %-14s %s\n" "Scripts:"   "$SCRIPTS_DIR"
-printf "  %-14s %s\n" "Code:"      "$CODE_DIR  (read-only source, latest main)"
-printf "  %-14s %s\n" "Dev:"       "$DEV_DIR  (active checkouts, feature branches)"
-echo ""
-printf "  %-14s %s\n" "Config:"    "$CLAUDE_DEST"
-printf "  %-14s %s\n" "Profile:"   "$SHELL_PROFILE"
-printf "  %-14s %s\n" "Atlassian:" "$ATLASSIAN_METHOD"
-printf "  %-14s %s\n" "Slack:"     "$SLACK_METHOD"
-printf "  %-14s %s\n" "Notion:"    "$NOTION_METHOD"
+_conn_label() {
+  case "$1" in
+    mcp)  echo "Connected (browser sign-in)";;
+    api)  echo "Connected (API key)";;
+    skip) echo "Not connected — re-run install.sh to add";;
+    *)    echo "$1";;
+  esac
+}
+printf "  %-20s %s\n" "Jira / Confluence:" "$(_conn_label "$ATLASSIAN_METHOD")"
+printf "  %-20s %s\n" "Notion:"            "$(_conn_label "$NOTION_METHOD")"
+printf "  %-20s %s\n" "Slack:"             "$(_conn_label "$SLACK_METHOD")"
 echo ""
 
-if [ "$ATLASSIAN_METHOD" = "mcp" ]; then
-  note "Atlassian: a browser will open to authorize on first Claude Code use."
-fi
-if [ "$NOTION_METHOD" = "mcp" ]; then
-  note "Notion: a browser will open to authorize on first Claude Code use."
-fi
+[ "$ATLASSIAN_METHOD" = "mcp" ] && note "Jira: a login page will open the first time Claude accesses Jira."
+[ "$NOTION_METHOD"   = "mcp" ] && note "Notion: a login page will open the first time Claude accesses Notion."
 
 echo ""
-echo "  Next:"
-echo "    1.  Reload shell:         source $SHELL_PROFILE"
-echo "    2.  Open VSCode and run:  /start"
-echo "    3.  Vault search is live — every prompt auto-queries your index"
+echo "  What to do next:"
 echo ""
-echo "  To re-index after adding docs:"
-echo "    python3 $REPO_DIR/rag/build_index.py --dir $VAULT_DIR --index $VAULT_DIR/.rag_index"
+echo "    1.  Close this terminal and open a new one"
+echo "        (or run:  source $SHELL_PROFILE)"
 echo ""
-echo "  To add or rotate tokens at any time:  ./install.sh"
-echo "  Worked example:  docs/walkthrough.md"
+echo "    2.  Open VS Code and type:  /start"
 echo ""
+if [ "$SIMPLE_MODE" = true ]; then
+  echo "  To connect services you skipped, or to change any setting:"
+  echo "    Re-run: ./install.sh"
+  echo ""
+else
+  echo "  To re-index after adding notes:"
+  echo "    python3 $REPO_DIR/rag/build_index.py --dir $VAULT_DIR --index $VAULT_DIR/.rag_index"
+  echo ""
+  echo "  To rotate or add tokens at any time:  ./install.sh"
+  echo "  Worked example:  docs/walkthrough.md"
+  echo ""
+fi
