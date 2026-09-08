@@ -821,6 +821,8 @@ if [ "$INSTALL_MODE" = "migrate" ] && [ -n "$BACKUP_DIR" ]; then
   fi
 fi
 
+WORKSPACE_FILE="$BASE_DIR/${SKILL_PREFIX}.code-workspace"
+
 # ── Step 5: Write CLAUDE.md ───────────────────────────────────────────────────
 
 CLAUDE_DEST="$CLAUDE_DIR/CLAUDE.md"
@@ -854,6 +856,7 @@ sed \
   -e "s|{DOTFILES_DIR}|${DOTFILES_DIR_ESC}|g" \
   -e "s|{PREFIX_UPPER}|${PREFIX_UPPER}|g" \
   -e "s|{SKILL_PREFIX}|${SKILL_PREFIX}|g" \
+  -e "s|{WORKSPACE_FILE}|${WORKSPACE_FILE}|g" \
   "$REPO_DIR/CLAUDE.md" > "$CLAUDE_DEST"
 
 ok "Profile written for $USER_NAME"
@@ -1196,13 +1199,44 @@ echo ""
 [ "$ATLASSIAN_METHOD" = "mcp" ] && note "Jira: a login page will open the first time Claude accesses Jira."
 [ "$NOTION_METHOD"   = "mcp" ] && note "Notion: a login page will open the first time Claude accesses Notion."
 
+# ── VS Code workspace file ────────────────────────────────────────────────────
+cat > "$WORKSPACE_FILE" << WORKSPACE
+{
+  "folders": [
+    {
+      "name": "${SKILL_PREFIX}-knowledge (notes & vault)",
+      "path": "${VAULT_DIR}"
+    },
+    {
+      "name": "${SKILL_PREFIX}-dotfiles (skills & config)",
+      "path": "${REPO_DIR}"
+    },
+    {
+      "name": "${SKILL_PREFIX}-scripts (your scripts)",
+      "path": "${SCRIPTS_DIR}"
+    }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/.rag_index": true,
+      "**/__pycache__": true
+    }
+  }
+}
+WORKSPACE
+ok "VS Code workspace created: $WORKSPACE_FILE"
+
 echo ""
 echo "  What to do next:"
 echo ""
 echo "    1.  Close this terminal and open a new one"
 echo "        (or run:  source $SHELL_PROFILE)"
 echo ""
-echo "    2.  Open VS Code and type:  /start"
+echo "    2.  Open VS Code using your workspace file:"
+echo "          code \"$WORKSPACE_FILE\""
+echo "        Or: File → Open Workspace from File → $(basename "$WORKSPACE_FILE")"
+echo ""
+echo "    3.  In VS Code, type:  /start"
 echo ""
 if [ "$SIMPLE_MODE" = true ]; then
   echo "  To connect services you skipped, or to change any setting:"

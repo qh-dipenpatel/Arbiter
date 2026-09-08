@@ -370,6 +370,10 @@ Skills prefixed with `/{SKILL_PREFIX}-` use your configured prefix.
 
 ---
 
+## VS Code Workspace
+
+Open VS Code using the workspace file at `{WORKSPACE_FILE}`. This loads the vault, dotfiles, and scripts as named folders in one window. Always open this workspace file, not a bare folder, so all three roots are available to Claude Code.
+
 ## Knowledge Vault
 
 Your knowledge vault is at `$ARBITER_KNOWLEDGE`. Every skill writes context here. Skills commit to this vault at session close.
