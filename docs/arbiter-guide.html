@@ -1,0 +1,733 @@
+<title>Arbiter</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg:          #F2F4F8;
+  --surface:     #FFFFFF;
+  --surface-2:   #E8EBF2;
+  --text:        #131520;
+  --text-2:      #484D68;
+  --text-3:      #888DAA;
+  --accent:      #B84B08;
+  --accent-bg:   #FDF0EA;
+  --accent-dim:  #D86030;
+  --ok:          #1A7D4C;
+  --ok-bg:       #E6F4EE;
+  --border:      #DCE0EE;
+  --code-bg:     #111420;
+  --code-text:   #D8DCF0;
+  --code-dim:    #4D5270;
+  --shadow:      0 1px 4px rgba(19,21,32,0.09);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:         #0C0E1A;
+    --surface:    #141726;
+    --surface-2:  #1C1F32;
+    --text:       #E0E4F6;
+    --text-2:     #8E94B8;
+    --text-3:     #525878;
+    --accent:     #D45E18;
+    --accent-bg:  #241208;
+    --accent-dim: #E87840;
+    --ok:         #28A863;
+    --ok-bg:      #091E14;
+    --border:     #23273E;
+    --code-bg:    #090B16;
+    --code-text:  #D8DCF0;
+    --code-dim:   #40455E;
+    --shadow:     0 1px 4px rgba(0,0,0,0.35);
+  }
+}
+:root[data-theme="dark"] {
+  --bg:         #0C0E1A;
+  --surface:    #141726;
+  --surface-2:  #1C1F32;
+  --text:       #E0E4F6;
+  --text-2:     #8E94B8;
+  --text-3:     #525878;
+  --accent:     #D45E18;
+  --accent-bg:  #241208;
+  --accent-dim: #E87840;
+  --ok:         #28A863;
+  --ok-bg:      #091E14;
+  --border:     #23273E;
+  --code-bg:    #090B16;
+  --code-text:  #D8DCF0;
+  --code-dim:   #40455E;
+  --shadow:     0 1px 4px rgba(0,0,0,0.35);
+}
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'Source Sans 3',system-ui,sans-serif;font-size:16px;line-height:1.65;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased}
+
+/* === SHELL === */
+.shell{display:grid;grid-template-columns:240px 1fr;min-height:100vh}
+
+/* === SIDEBAR === */
+.sidebar{position:sticky;top:0;height:100vh;overflow-y:auto;background:var(--surface);border-right:1px solid var(--border);flex-shrink:0}
+.sidebar-top{padding:22px 20px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.brand{font-family:'Outfit',sans-serif;font-size:17px;font-weight:700;letter-spacing:-0.02em;color:var(--text)}
+.brand-badge{font-family:'Outfit',sans-serif;font-size:10px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent);background:var(--accent-bg);padding:2px 7px;border-radius:3px}
+.nav-wrap{padding:14px 0 48px}
+.nav-group{margin-bottom:2px}
+.nav-label{font-family:'Outfit',sans-serif;font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-3);padding:12px 20px 4px;display:block}
+.nav-a{display:block;padding:7px 20px;font-size:14px;color:var(--text-2);text-decoration:none;border-left:2px solid transparent;transition:color 0.12s,background 0.12s,border-color 0.12s}
+.nav-a:hover{color:var(--text);background:var(--surface-2)}
+.nav-a.active{color:var(--accent);border-left-color:var(--accent);font-weight:600}
+
+/* === MAIN CONTENT === */
+.content{padding:52px 60px 100px;min-width:0}
+.content-inner{max-width:700px}
+
+/* === PAGE HEADER === */
+.page-header{padding-bottom:40px;border-bottom:1px solid var(--border);margin-bottom:52px}
+.eyebrow{font-family:'Outfit',sans-serif;font-size:11px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:var(--accent);margin-bottom:14px}
+h1{font-family:'Outfit',sans-serif;font-size:44px;font-weight:700;letter-spacing:-0.03em;line-height:1.08;color:var(--text);text-wrap:balance;margin-bottom:18px}
+.page-lead{font-size:18px;line-height:1.6;color:var(--text-2);max-width:54ch}
+
+/* === SECTIONS === */
+section{margin-bottom:60px;scroll-margin-top:20px}
+h2{font-family:'Outfit',sans-serif;font-size:26px;font-weight:700;letter-spacing:-0.025em;color:var(--text);text-wrap:balance;margin-bottom:18px}
+h3{font-family:'Outfit',sans-serif;font-size:17px;font-weight:600;letter-spacing:-0.01em;color:var(--text);text-wrap:balance;margin-top:32px;margin-bottom:10px}
+h3:first-child{margin-top:0}
+p{color:var(--text-2);margin-bottom:14px}
+p:last-child{margin-bottom:0}
+strong{color:var(--text);font-weight:600}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* === INTRO COLUMNS === */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:22px 0}
+.col-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px}
+.col-card-label{font-family:'Outfit',sans-serif;font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-3);margin-bottom:8px}
+.col-card h3{font-size:15px;margin:0 0 8px}
+.col-card p{font-size:14px;line-height:1.55;margin:0}
+
+/* === DEPT GRID === */
+.dept-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:18px 0}
+.dept-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px;display:grid;grid-template-columns:28px 1fr;gap:12px;align-items:start}
+.dept-abbr{width:28px;height:28px;border-radius:5px;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-family:'Outfit',sans-serif;font-size:10px;font-weight:700;color:var(--text-3);letter-spacing:0.02em;flex-shrink:0;margin-top:1px}
+.dept-cmd{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;color:var(--accent);margin-bottom:2px}
+.dept-role{font-family:'Outfit',sans-serif;font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px}
+.dept-out{font-size:13px;color:var(--text-2);line-height:1.4}
+
+/* === CODE BLOCKS === */
+.code-block{background:var(--code-bg);border-radius:8px;overflow:hidden;margin:14px 0}
+.code-top{padding:9px 16px;border-bottom:1px solid rgba(255,255,255,0.05);display:flex;align-items:center}
+.code-lang{font-family:'Outfit',sans-serif;font-size:10px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent-dim)}
+.code-body{overflow-x:auto}
+.code-body pre{padding:16px;font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.7;color:var(--code-text);white-space:pre}
+.cm{color:var(--code-dim)}
+code{font-family:'JetBrains Mono',monospace;font-size:0.84em;background:var(--surface-2);color:var(--accent);border-radius:3px;padding:1px 5px}
+
+/* === STEPS === */
+.steps{list-style:none;display:flex;flex-direction:column;gap:20px;margin:20px 0}
+.step{display:grid;grid-template-columns:30px 1fr;gap:18px;align-items:start}
+.step-n{width:30px;height:30px;border-radius:50%;border:2px solid var(--accent);color:var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Outfit',sans-serif;font-size:13px;font-weight:700;flex-shrink:0;margin-top:2px}
+.step-body h4{font-family:'Outfit',sans-serif;font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px}
+.step-body p{font-size:14px;margin-bottom:0}
+
+/* === CHECKLIST === */
+.checklist{list-style:none;display:flex;flex-direction:column;gap:6px;margin:12px 0}
+.checklist li{display:flex;align-items:flex-start;gap:10px;font-size:14px;color:var(--text-2);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:9px 12px}
+.chk{width:16px;height:16px;border-radius:3px;border:1.5px solid var(--border);flex-shrink:0;margin-top:2px}
+
+/* === TABLE === */
+.tbl-wrap{overflow-x:auto;margin:14px 0}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font-family:'Outfit',sans-serif;font-size:10px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-3);text-align:left;padding:8px 12px;border-bottom:1px solid var(--border)}
+td{padding:10px 12px;color:var(--text-2);border-bottom:1px solid var(--border);vertical-align:top}
+td:first-child{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text);white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--surface-2)}
+
+/* === CALLOUT === */
+.callout{border-left:3px solid var(--accent);background:var(--accent-bg);border-radius:0 6px 6px 0;padding:13px 16px;margin:16px 0}
+.callout.ok{border-left-color:var(--ok);background:var(--ok-bg)}
+.callout-title{font-family:'Outfit',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--accent);margin-bottom:4px}
+.callout.ok .callout-title{color:var(--ok)}
+.callout p{font-size:14px;line-height:1.55;margin:0}
+
+/* === PIPELINE CHAINS === */
+.chain-block{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:18px 20px;margin-bottom:14px}
+.chain-block-title{font-family:'Outfit',sans-serif;font-size:14px;font-weight:700;color:var(--text);margin-bottom:2px}
+.chain-block-desc{font-size:13px;color:var(--text-3);margin-bottom:16px}
+.chain-scroll{overflow-x:auto;padding-bottom:4px}
+.chain{display:flex;align-items:flex-start;gap:0;min-width:max-content}
+.chain-step{display:flex;flex-direction:column;align-items:center}
+.pill{background:var(--surface-2);border:1px solid var(--border);border-radius:5px;padding:7px 11px;font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:500;color:var(--text-2);white-space:nowrap}
+.pill.session{color:var(--text-3);border-style:dashed}
+.pill.skill{border-color:var(--accent);color:var(--accent)}
+.pill.gate{background:var(--ok-bg);border-color:var(--ok);color:var(--ok);font-family:'Outfit',sans-serif;font-weight:700;letter-spacing:0.02em}
+.pill-label{font-family:'Outfit',sans-serif;font-size:10px;color:var(--text-3);margin-top:5px;text-align:center;max-width:72px;line-height:1.25}
+.arr{display:flex;align-items:center;padding:0 5px;color:var(--text-3);font-size:13px;padding-bottom:22px;align-self:flex-end}
+
+/* === GATES TABLE === */
+.gates-table td:first-child{white-space:normal;font-size:13px}
+
+/* === TIMELINE === */
+.timeline{position:relative;padding-left:30px;margin:20px 0}
+.timeline::before{content:'';position:absolute;left:8px;top:8px;bottom:8px;width:1px;background:var(--border)}
+.tl-item{position:relative;margin-bottom:26px}
+.tl-item::before{content:'';position:absolute;left:-26px;top:7px;width:9px;height:9px;border-radius:50%;background:var(--surface-2);border:2px solid var(--border)}
+.tl-item.gate-item::before{background:var(--ok);border-color:var(--ok)}
+.tl-cmd{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:500;color:var(--accent);margin-bottom:5px}
+.tl-text{font-size:14px;color:var(--text-2);line-height:1.6}
+.tl-badge{display:inline-flex;align-items:center;gap:5px;margin-top:7px;font-family:'Outfit',sans-serif;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--ok);background:var(--ok-bg);border-radius:3px;padding:2px 8px}
+
+/* === DIVIDER === */
+hr{border:none;border-top:1px solid var(--border);margin:52px 0}
+
+/* === THEME BUTTON === */
+.theme-btn{position:fixed;top:16px;right:16px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:15px;cursor:pointer;color:var(--text-2);z-index:200;box-shadow:var(--shadow);transition:background 0.12s}
+.theme-btn:hover{background:var(--surface-2)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* === RESPONSIVE === */
+@media(max-width:800px){
+  .shell{grid-template-columns:1fr}
+  .sidebar{position:relative;height:auto;border-right:none;border-bottom:1px solid var(--border)}
+  .nav-wrap{display:flex;overflow-x:auto;padding:6px 0 10px;gap:0}
+  .nav-group{display:contents}
+  .nav-label{display:none}
+  .nav-a{white-space:nowrap;border-left:none;border-bottom:2px solid transparent;padding:8px 14px}
+  .nav-a.active{border-left:none;border-bottom-color:var(--accent)}
+  .content{padding:28px 20px 64px}
+  .two-col,.dept-grid{grid-template-columns:1fr}
+  h1{font-size:32px}
+  h2{font-size:22px}
+}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+</style>
+
+<button class="theme-btn" id="theme-btn" aria-label="Toggle colour theme">☾</button>
+
+<div class="shell">
+  <nav class="sidebar" aria-label="Page navigation">
+    <div class="sidebar-top">
+      <span class="brand">Arbiter</span>
+      <span class="brand-badge">Docs</span>
+    </div>
+    <div class="nav-wrap">
+      <div class="nav-group">
+        <span class="nav-label">Introduction</span>
+        <a class="nav-a active" href="#what">What is Arbiter</a>
+        <a class="nav-a" href="#how-it-works">How It Works</a>
+      </div>
+      <div class="nav-group">
+        <span class="nav-label">Getting Started</span>
+        <a class="nav-a" href="#prerequisites">Prerequisites</a>
+        <a class="nav-a" href="#install">Installation</a>
+      </div>
+      <div class="nav-group">
+        <span class="nav-label">Using Arbiter</span>
+        <a class="nav-a" href="#commands">Commands</a>
+        <a class="nav-a" href="#chains">Skill Chains</a>
+        <a class="nav-a" href="#walkthrough">Walkthrough</a>
+        <a class="nav-a" href="#concepts">Key Concepts</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="content">
+    <div class="content-inner">
+
+      <header class="page-header" id="top">
+        <div class="eyebrow">Claude Code · Open Source</div>
+        <h1>Arbiter</h1>
+        <p class="page-lead">A governed agentic workflow system. Claude acts as a structured team of department heads — each with a defined role, clear standards, and a handoff contract to the next. You stay in the loop at every approval checkpoint.</p>
+      </header>
+
+      <!-- WHAT IS ARBITER -->
+      <section id="what">
+        <h2>What is Arbiter</h2>
+        <p>Claude without structure is a general assistant. Every session starts cold. Outputs drift based on how a question is phrased. Context disappears at the end of a conversation, and the next session spends its first ten minutes reconstructing what the last one already knew.</p>
+        <p>Arbiter solves this by giving Claude three things it doesn't have by default: <strong>a defined role for each phase of work</strong>, <strong>state that carries forward through a knowledge vault</strong>, and <strong>standards that apply to every word and every line of code</strong>.</p>
+        <p>The result is a session-to-session thinking partner that knows your stack, your clients, your standards, and what happened on the last ticket — without you recapping any of it.</p>
+
+        <div class="two-col">
+          <div class="col-card">
+            <div class="col-card-label">What it is</div>
+            <h3>A structured skill chain</h3>
+            <p>Claude Code skill files that turn Claude into specialized roles: intake coordinator, diagnostician, architect, engineer, adversarial reviewer. Each role has a defined job and a clean handoff to the next.</p>
+          </div>
+          <div class="col-card">
+            <div class="col-card-label">What it is not</div>
+            <h3>An autonomous agent</h3>
+            <p>Nothing runs without you invoking it. Nothing posts to Jira, sends a Slack message, or commits code. Every output is a draft. The gates in each skill are where your judgment replaces Claude's.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- HOW IT WORKS -->
+      <section id="how-it-works">
+        <h2>How It Works</h2>
+
+        <h3>The Departments Model</h3>
+        <p>Each skill represents one role. A ticket doesn't move to the next role until the current one completes and you confirm the output. The six ticket-chain skills carry the prefix you choose at install time — if your prefix is <code>ah</code>, <code>/{prefix}-ticket</code> becomes <code>/ah-ticket</code>.</p>
+
+        <div class="dept-grid">
+          <div class="dept-card">
+            <div class="dept-abbr">IC</div>
+            <div>
+              <div class="dept-cmd">/{prefix}-ticket</div>
+              <div class="dept-role">Intake Coordinator</div>
+              <div class="dept-out">ORIENT block, ticket classification, opening Jira comment draft</div>
+            </div>
+          </div>
+          <div class="dept-card">
+            <div class="dept-abbr">DX</div>
+            <div>
+              <div class="dept-cmd">/{prefix}-support</div>
+              <div class="dept-role">Diagnostician</div>
+              <div class="dept-out">Root cause trace source to silver, evidence trail, fix recommendation</div>
+            </div>
+          </div>
+          <div class="dept-card">
+            <div class="dept-abbr">PM</div>
+            <div>
+              <div class="dept-cmd">/{prefix}-spec</div>
+              <div class="dept-role">Product Manager</div>
+              <div class="dept-out">Requirements, acceptance criteria, success metrics</div>
+            </div>
+          </div>
+          <div class="dept-card">
+            <div class="dept-abbr">AR</div>
+            <div>
+              <div class="dept-cmd">/{prefix}-arch</div>
+              <div class="dept-role">Architect</div>
+              <div class="dept-out">Design options, trade-offs, recommended approach with WHY NOT for each rejected path</div>
+            </div>
+          </div>
+          <div class="dept-card">
+            <div class="dept-abbr">EN</div>
+            <div>
+              <div class="dept-cmd">/{prefix}-dev</div>
+              <div class="dept-role">Engineer</div>
+              <div class="dept-out">Code against an approved design only. No scope drift.</div>
+            </div>
+          </div>
+          <div class="dept-card">
+            <div class="dept-abbr">QA</div>
+            <div>
+              <div class="dept-cmd">/{prefix}-qa</div>
+              <div class="dept-role">Adversarial Reviewer</div>
+              <div class="dept-out">Findings by severity, routed to dev, arch, or spec as appropriate</div>
+            </div>
+          </div>
+        </div>
+
+        <h3>State That Carries Forward</h3>
+        <p>Every skill writes a state file to your knowledge vault at <code>02-tickets/{KEY}/{KEY}-state.md</code>. The next skill reads it. When <code>/{prefix}-dev</code> starts, it already knows the root cause, the approved design, and every open assumption — you never recap. A session can end and pick up the next day without losing a single decision.</p>
+
+        <h3>Standards Applied Everywhere</h3>
+        <p>Three documents govern all output. Every skill reads them at Step 0, before producing anything.</p>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Standard</th><th>Governs</th></tr></thead>
+            <tbody>
+              <tr><td>voice-standard.md</td><td>Every word. Conclusion first, bracket test (cut anything that can be removed without losing meaning), active voice, no template residue. Applies to a Jira comment and a system design doc equally.</td></tr>
+              <tr><td>technical-standards.md</td><td>Every line of code. Type hints, functions at 40 lines or fewer, named constants, no secrets, explicit write modes and null handling. Verify before using any method or path.</td></tr>
+              <tr><td>pipeline-standards.md</td><td>Every pipeline. Layer boundaries, write semantics, idempotency at every layer, null handling explicit at every join, schema lineage from source through silver.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>The Session Frame</h3>
+        <p><code>/start</code> opens every work block with a Jira sync, vault health check, and open blocker list — you see the full picture before picking up anything new. <code>/close</code> writes the session log, updates the ticket state file, and surfaces corrections as memory candidates. Nothing is left floating between sessions.</p>
+
+        <h3>Memory</h3>
+        <p>When you correct Claude's approach, <code>/close</code> surfaces it as a memory candidate. You approve it. It saves to <code>memory/</code> in the repo. The next session, the correction applies without you repeating it. Memory files compound over time into a picture of how you work, what has gone wrong, and what has been validated.</p>
+      </section>
+
+      <hr>
+
+      <!-- PREREQUISITES -->
+      <section id="prerequisites">
+        <h2>Prerequisites</h2>
+        <p>Complete this before running the installer. Expected time: 25–30 minutes the first time, mostly waiting for downloads and token collection.</p>
+
+        <h3>Applications</h3>
+        <ul class="checklist">
+          <li><span class="chk" aria-hidden="true"></span><div><strong>Homebrew (macOS) or apt/dnf/pacman (Linux)</strong> — package manager for everything below</div></li>
+          <li><span class="chk" aria-hidden="true"></span><div><strong>Git</strong> — configured with your name and email. Verify: <code>git config --global user.name</code></div></li>
+          <li><span class="chk" aria-hidden="true"></span><div><strong>Node.js 18+</strong> — MCP servers run via <code>npx</code>. Verify: <code>node --version</code></div></li>
+          <li><span class="chk" aria-hidden="true"></span><div><strong>Python 3.9+</strong> — required for the vault search pipeline. Verify: <code>python3 --version</code></div></li>
+          <li><span class="chk" aria-hidden="true"></span><div><strong>Claude Code</strong> — authenticated with a Claude.ai subscription or Anthropic API key. Download: claude.ai/download</div></li>
+          <li><span class="chk" aria-hidden="true"></span><div><strong>VSCode</strong> with the Claude Code extension installed (<code>Cmd+Shift+X</code> → search "Claude Code")</div></li>
+          <li><span class="chk" aria-hidden="true"></span><div><strong>Obsidian</strong> — for your knowledge vault. Download: obsidian.md</div></li>
+        </ul>
+
+        <h3>Tokens to Collect</h3>
+        <p>The installer prompts for these and stores them in the OS credential store — macOS Keychain, Linux Secret Service, or Windows Credential Manager. They never touch a file on disk.</p>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Service</th><th>Where to get it</th><th>Time</th><th>Required</th></tr></thead>
+            <tbody>
+              <tr><td>Atlassian (Jira + Confluence)</td><td>id.atlassian.com → Security → API tokens. Also note your base URL and login email.</td><td>5 min</td><td>Yes</td></tr>
+              <tr><td>Slack</td><td>api.slack.com/apps → create app, add scopes (channels:history, channels:read, search:read, users:read), install to workspace, copy Bot token starting with <code>xoxb-</code></td><td>15–20 min</td><td>Optional</td></tr>
+              <tr><td>Notion</td><td>notion.so/my-integrations → New integration. Requires workspace admin to enable developer connections first at app.notion.com/developers/connections.</td><td>5 min</td><td>Optional</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout">
+          <div class="callout-title">Slack takes longest</div>
+          <p>Slack requires creating an app in your workspace. If your company restricts app creation to workspace admins, skip it during install and add it later by re-running <code>install.sh</code>.</p>
+        </div>
+      </section>
+
+      <!-- INSTALLATION -->
+      <section id="install">
+        <h2>Installation</h2>
+        <p>The installer collects your identity, creates the vault folder structure, installs skill files, stores tokens securely, wires MCP servers, and builds the initial vault search index. Python packages (<code>chromadb</code>, <code>sentence-transformers</code>) install automatically.</p>
+
+        <ol class="steps">
+          <li class="step">
+            <div class="step-n">1</div>
+            <div class="step-body">
+              <h4>Clone the repo</h4>
+              <p>Use the naming pattern <code>{base}/{prefix}-dotfiles</code>. Your prefix drives all folder names, environment variables, and slash command names.</p>
+              <div class="code-block">
+                <div class="code-top"><span class="code-lang">bash</span></div>
+                <div class="code-body"><pre><span class="cm"># Example: base folder "dipen", prefix "ah"</span>
+mkdir -p ~/Developer/dipen
+git clone &lt;repo-url&gt; ~/Developer/dipen/ah-dotfiles
+cd ~/Developer/dipen/ah-dotfiles</pre></div>
+              </div>
+            </div>
+          </li>
+          <li class="step">
+            <div class="step-n">2</div>
+            <div class="step-body">
+              <h4>Run the installer</h4>
+              <p>Walks you through prompts for name, title, company, domain, prefix, and service connections. If you have an existing Claude Code setup it detects it automatically and offers a migration path — your memory files and custom skills are preserved, standard skills are updated, and your entire <code>~/.claude/</code> is backed up before any change.</p>
+              <div class="code-block">
+                <div class="code-top"><span class="code-lang">bash</span></div>
+                <div class="code-body"><pre>./install.sh</pre></div>
+              </div>
+            </div>
+          </li>
+          <li class="step">
+            <div class="step-n">3</div>
+            <div class="step-body">
+              <h4>Reload your shell and verify</h4>
+              <p>The installer writes environment variables to your shell profile. Reload it, then verify the vars are set. Your prefix uppercased becomes the env var prefix: prefix <code>ah</code> gives <code>$AH_KNOWLEDGE</code>.</p>
+              <div class="code-block">
+                <div class="code-top"><span class="code-lang">bash</span></div>
+                <div class="code-body"><pre>source ~/.zshrc
+
+echo $AH_KNOWLEDGE    <span class="cm"># → ~/Developer/dipen/ah-knowledge</span>
+echo $AH_SCRIPTS      <span class="cm"># → ~/Developer/dipen/ah-scripts</span>
+echo $CLAUDE_DOTFILES <span class="cm"># → ~/Developer/dipen/ah-dotfiles</span></pre></div>
+              </div>
+            </div>
+          </li>
+          <li class="step">
+            <div class="step-n">4</div>
+            <div class="step-body">
+              <h4>Connect MCP servers in VSCode</h4>
+              <p>Open VSCode → Claude Code panel → settings gear → MCP Servers → Connect next to each server. The Atlassian server opens a browser window for OAuth on first connect. Verify by typing <code>@jira</code> or <code>@slack</code> in Claude Code — tool autocomplete appears if the server is live.</p>
+            </div>
+          </li>
+          <li class="step">
+            <div class="step-n">5</div>
+            <div class="step-body">
+              <h4>Open your vault in Obsidian and start</h4>
+              <p>Obsidian → Open folder as vault → select <code>~/Developer/dipen/ah-knowledge</code>. All subfolders are already created. Then in Claude Code:</p>
+              <div class="code-block">
+                <div class="code-top"><span class="code-lang">claude code</span></div>
+                <div class="code-body"><pre>/start</pre></div>
+              </div>
+            </div>
+          </li>
+        </ol>
+
+        <h3>Folder layout after install</h3>
+        <div class="code-block">
+          <div class="code-top"><span class="code-lang">structure</span></div>
+          <div class="code-body"><pre>~/Developer/dipen/
+│
+├── ah-dotfiles/          <span class="cm">← this repo: skills, standards, config (git tracked)</span>
+│
+├── ah-knowledge/         <span class="cm">← your Obsidian vault (local only, never git tracked)</span>
+│   ├── 00-landing/       <span class="cm">← quick captures, rough notes</span>
+│   ├── 01-system-map/    <span class="cm">← clients/, pipelines/, architecture/, data-model/</span>
+│   ├── 02-tickets/       <span class="cm">← one folder per Jira ticket, state files live here</span>
+│   └── 03-knowledge-base/<span class="cm">← decisions/, learnings/, patterns/</span>
+│
+└── ah-scripts/           <span class="cm">← reusable scripts Claude generates (git optional)</span></pre></div>
+        </div>
+
+        <div class="callout ok">
+          <div class="callout-title">Vault search is automatic</div>
+          <p>Every prompt is automatically searched against the vault index by <code>hooks/vault_search_hook.sh</code>. Relevant documents appear in the conversation as a <code>&lt;vault_context&gt;</code> block. Re-index after adding new documents: <code>python3 $CLAUDE_DOTFILES/rag/build_index.py --dir $AH_KNOWLEDGE --index $AH_KNOWLEDGE/.rag_index</code></p>
+        </div>
+      </section>
+
+      <hr>
+
+      <!-- COMMANDS -->
+      <section id="commands">
+        <h2>Commands</h2>
+        <p>Invoke with a forward slash in Claude Code. The six ticket-chain skills carry your prefix. Session and utility skills do not.</p>
+
+        <h3>Session Frame</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Command</th><th>When to use</th></tr></thead>
+            <tbody>
+              <tr><td>/start</td><td>Opens every session. Jira sync, vault health check, surfaces blockers and open tickets.</td></tr>
+              <tr><td>/save</td><td>Mid-session checkpoint. Snapshot current state without closing the session.</td></tr>
+              <tr><td>/close</td><td>Ends every work block. Session log, state file update, memory candidates, timesheet entry.</td></tr>
+              <tr><td>/sync</td><td>10-minute fact hygiene. Reads active state files, surfaces blockers and pending decisions.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Ticket Chain Skills</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Command</th><th>Role</th><th>When</th></tr></thead>
+            <tbody>
+              <tr><td>/{prefix}-ticket [ID]</td><td>Intake</td><td>Default start for any assigned ticket. Orient, classify, draft opening comment.</td></tr>
+              <tr><td>/{prefix}-support [ID]</td><td>Diagnostician</td><td>Bug tickets. INTAKE + TROUBLESHOOT (source to silver) + HANDOFF PACKAGE.</td></tr>
+              <tr><td>/{prefix}-spec [ID]</td><td>Product manager</td><td>Define WHAT. Requirements, acceptance criteria, success metrics.</td></tr>
+              <tr><td>/{prefix}-arch [ID]</td><td>Architect</td><td>Design HOW. Options, trade-offs, recommendation. Your approval gates <code>/{prefix}-dev</code>.</td></tr>
+              <tr><td>/{prefix}-dev [ID]</td><td>Engineer</td><td>Implementation against an approved design only.</td></tr>
+              <tr><td>/{prefix}-qa [ID]</td><td>Adversary</td><td>Adversarial review before PR. Findings routed by severity and destination.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Utilities</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Command</th><th>When</th></tr></thead>
+            <tbody>
+              <tr><td>/draft</td><td>Any message going to another person. Applies client voice or internal voice, labeled.</td></tr>
+              <tr><td>/weekly [CLIENT]</td><td>Before every client call. Pulls recent tickets, builds signal list and talking points.</td></tr>
+              <tr><td>/learn [topic]</td><td>Deep single-topic learning. Probe, teach, challenge, explain-it-back.</td></tr>
+              <tr><td>/setup-client [CLIENT]</td><td>New client onboarding. Schema registry and Postman config.</td></tr>
+              <tr><td>/pull-notes [meeting]</td><td>Pull meeting transcript into the vault for context.</td></tr>
+              <tr><td>/whiteboard [idea]</td><td>Validate a new idea before adding it to the backlog.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- SKILL CHAINS -->
+      <section id="chains">
+        <h2>Skill Chains</h2>
+        <p>Most tickets follow one of three chains. Use the chain that matches the ticket type. The chain is not rigid — it stops when the work stops, and loops back when QA or scope changes require it.</p>
+
+        <div class="chain-block">
+          <div class="chain-block-title">Coordination</div>
+          <div class="chain-block-desc">Investigation, decision, or status update. No code change.</div>
+          <div class="chain-scroll">
+            <div class="chain">
+              <div class="chain-step"><div class="pill session">/start</div><div class="pill-label">Open session</div></div>
+              <div class="arr">→</div>
+              <div class="chain-step"><div class="pill skill">/{prefix}-ticket</div><div class="pill-label">Orient + classify</div></div>
+              <div class="arr">→</div>
+              <div class="chain-step"><div class="pill session">/close</div><div class="pill-label">Log + commit</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="chain-block">
+          <div class="chain-block-title">Bug Ticket</div>
+          <div class="chain-block-desc">Wrong data. Trace root cause from source to silver, then fix it.</div>
+          <div class="chain-scroll">
+            <div class="chain">
+              <div class="chain-step"><div class="pill session">/start</div><div class="pill-label">Open session</div></div>
+              <div class="arr">→</div>
+              <div class="chain-step"><div class="pill skill">/{prefix}-ticket</div><div class="pill-label">Orient</div></div>
+              <div class="arr">→</div>
+              <div class="chain-step"><div class="pill skill">/{prefix}-support</div><div class="pill-label">Diagnose</div></div>
+              <div class="arr">→</div>
+              <div class="chain-step"><div class="pill skill">/{prefix}-spec</div><div class="pill-label">Requirements</div></div>
+              <div class="arr">→</div>
+              <div class="chain-step"><div class="pill skill">/{prefix}-arch</div><div class="pill-label">Design</div></div>
+              <div class="arr">→</div>
+              <div class="chain-step"><div class="pill gate">◆ Approve</div><div class="pill-label">Your call</div></div>
+              <div class="arr">→</div>
+              <div class="chain-step"><div class="pill skill">/{prefix}-dev</div><div class="pill-label">Implement</div></div>
+              <div class="arr">→</div>
+              <div class="chain-step"><div class="pill skill">/{prefix}-qa</div><div class="pill-label">Review</div></div>
+              <div class="arr">→</div>
+              <div class="chain-step"><div class="pill session">/close</div><div class="pill-label">Log + commit</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="chain-block">
+          <div class="chain-block-title">Build Ticket</div>
+          <div class="chain-block-desc">New feature, new pipeline, or schema change.</div>
+          <div class="chain-scroll">
+            <div class="chain">
+              <div class="chain-step"><div class="pill session">/start</div><div class="pill-label">Open session</div></div>
+              <div class="arr">→</div>
+              <div class="chain-step"><div class="pill skill">/{prefix}-ticket</div><div class="pill-label">Orient</div></div>
+              <div class="arr">→</div>
+              <div class="chain-step"><div class="pill skill">/{prefix}-spec</div><div class="pill-label">Requirements</div></div>
+              <div class="arr">→</div>
+              <div class="chain-step"><div class="pill skill">/{prefix}-arch</div><div class="pill-label">Design</div></div>
+              <div class="arr">→</div>
+              <div class="chain-step"><div class="pill gate">◆ Approve</div><div class="pill-label">Your call</div></div>
+              <div class="arr">→</div>
+              <div class="chain-step"><div class="pill skill">/{prefix}-dev</div><div class="pill-label">Implement</div></div>
+              <div class="arr">→</div>
+              <div class="chain-step"><div class="pill skill">/{prefix}-qa</div><div class="pill-label">Review</div></div>
+              <div class="arr">→</div>
+              <div class="chain-step"><div class="pill session">/close</div><div class="pill-label">Log + commit</div></div>
+            </div>
+          </div>
+        </div>
+
+        <h3>Gates</h3>
+        <p>Every skill has at least one pause point where you confirm the output before the chain continues. A gate is where your judgment replaces Claude's. Don't skip them.</p>
+        <div class="tbl-wrap">
+          <table class="gates-table">
+            <thead><tr><th>Skill</th><th>Gate</th></tr></thead>
+            <tbody>
+              <tr><td>/{prefix}-ticket</td><td>Explain back: you state your read of the ticket in two sentences before the skill accepts the classification</td></tr>
+              <tr><td>/{prefix}-spec</td><td>RESTATE gate: the skill restates the problem before writing a single requirement</td></tr>
+              <tr><td>/{prefix}-arch</td><td>Design approval: you approve the recommended option before <code>/{prefix}-dev</code> starts</td></tr>
+              <tr><td>/{prefix}-dev</td><td>TEACHING gate: you explain the approach before the skill writes any code</td></tr>
+              <tr><td>/{prefix}-qa</td><td>Full findings report: you review all findings before routing to fix or approving merge</td></tr>
+              <tr><td>/close</td><td>Session log review: you confirm the session record before the vault commits</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <hr>
+
+      <!-- WALKTHROUGH -->
+      <section id="walkthrough">
+        <h2>Walkthrough: A Bug Ticket</h2>
+        <p>A client reports 22 patients are missing from the monthly TAVR clinical report. The submission was two weeks ago. You open Jira and find ticket <code>CD-200</code>. Here is how the chain works on a real ticket.</p>
+
+        <div class="callout">
+          <div class="callout-title">Fictional data</div>
+          <p>All client names, ticket IDs, table names, and data values are fictional. The full worked example with code output is in <code>docs/walkthrough.md</code>.</p>
+        </div>
+
+        <div class="timeline">
+          <div class="tl-item">
+            <div class="tl-cmd">/start</div>
+            <div class="tl-text">Jira syncs. You see 3 open tickets, vault health for 12 state files, and one stale state file. CD-200 is flagged high priority. You start there.</div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-cmd">/ah-ticket CD-200</div>
+            <div class="tl-text">The skill reads Jira, pulls the Lakewood Health client file from the vault's system map, and produces an ORIENT block: what is confirmed (500 records submitted, 478 in clinical report, pipeline ran without error), what is unknown (where the 22 dropped), and what is assumed. The explain-back gate fires — you state your read of the ticket in two sentences before the skill accepts the classification and routes to <code>/ah-support</code>.</div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-cmd">/ah-support CD-200</div>
+            <div class="tl-text">The diagnostician traces Raw → Bronze → Silver. Raw: 500 rows confirmed. Bronze: 478 rows. Gap appears at Bronze. A null check on Raw reveals 22 records where <code>encounter_date IS NULL</code>. The Bronze transform filters them at line 47: <code>df.filter(col("encounter_date").isNotNull())</code>. Root cause confirmed. The handoff package names three fix options and flags that the filter was added by a prior Data Platform decision — any change requires their review.</div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-cmd">/ah-spec CD-200</div>
+            <div class="tl-text">The spec skill reads the support handoff — not Jira — and restates the problem before writing a single requirement. Four requirements, four acceptance criteria with pass/fail conditions, two success metrics. AC1: zero records dropped silently at Bronze. AC2: a <code>quarantine_ind</code> column exists on Bronze with value 1 for null records. Pass condition is explicit.</div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-cmd">/ah-arch CD-200</div>
+            <div class="tl-text">Three design options. Option A recommended: add <code>quarantine_ind = 1</code> to Bronze records with null <code>encounter_date</code>, exclude them at Silver, alert client to resubmit. Option B (coalesce to <code>load_date</code>) rejected — a synthetic date is wrong data, and wrong data is worse than flagged data. Option C (pass through naked) rejected — downstream date range logic produces unpredictable results on nulls. The original filter existed for this reason.</div>
+          </div>
+          <div class="tl-item gate-item">
+            <div class="tl-cmd">◆ You approve Option A</div>
+            <div class="tl-text">You post the design to Jira for Data Platform review. They respond the same day: approved. Implementation is now unlocked.</div>
+            <div class="tl-badge">Gate cleared</div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-cmd">/ah-dev CD-200</div>
+            <div class="tl-text">The TEACHING gate fires — you explain the approach before code is written. The skill produces the Bronze and Silver changes: typed functions, named constants (<code>NULL_ENCOUNTER_DATE_FLAG: int = 1</code>), file header with ticket reference, logging via the proper framework, no magic numbers.</div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-cmd">/ah-qa CD-200</div>
+            <div class="tl-text">The adversary reads spec, design, and implementation. One HIGH finding: the Silver filter uses <code>== 0</code> comparison on the integer flag without an explicit cast — if <code>quarantine_ind</code> is coerced to string anywhere in the pipeline, the filter fails silently and all records are excluded. One MEDIUM: no alert when the entire batch is quarantined. Both valid. HIGH routed back to <code>/ah-dev</code>. MEDIUM deferred to a follow-on ticket by mutual agreement.</div>
+          </div>
+          <div class="tl-item gate-item">
+            <div class="tl-cmd">◆ QA approved with conditions</div>
+            <div class="tl-text">HIGH finding fixed. QA re-runs and approves. You run <code>/draft</code> for the Jira resolution comment (internal voice) and the client Slack message (client voice: "Your TAVR data is complete. 22 records from your May submission are held for correction.").</div>
+            <div class="tl-badge">Gate cleared</div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-cmd">/close</div>
+            <div class="tl-text">Session log written to the vault. State file updated to CLOSED. Memory candidate surfaced: <em>quarantine_ind is the standard column name for null-excluded records at Bronze — not filter_ind or exclude_ind.</em> You approve it. The next session will apply this without you repeating it.</div>
+          </div>
+        </div>
+
+        <p>Nine skill invocations across two or three sessions. Your judgment at every gate. Nothing sent automatically. The 22 missing patients have a clear resolution path and the system carries a memory of how this class of problem was handled.</p>
+      </section>
+
+      <!-- KEY CONCEPTS -->
+      <section id="concepts">
+        <h2>Key Concepts</h2>
+
+        <h3>PHI Guardrails</h3>
+        <p>Health data rules apply at every layer — code, logs, tests, configs, commits, vault files, and drafts. The moment PHI comes into scope, the skill stops and flags it. You acknowledge before anything continues.</p>
+        <p><strong>Never appears in any output:</strong> patient names, MRNs, dates of birth, encounter IDs that could identify a person, any field that uniquely identifies a patient.</p>
+        <p><strong>Permitted:</strong> counts ("22 of 500 records failed the null check"), aggregate statistics, anonymized field references, severity classifications.</p>
+
+        <h3>Two Voices</h3>
+        <p>Every communication is labeled before it is drafted. <strong>Client voice</strong> speaks in outcomes — the reader is a clinical administrator who cares about data delivery and what they need to do, not pipeline internals. <strong>Internal voice</strong> is technical and precise — table names, ticket numbers, failure counts, specific ownership of next steps, no softening. The same root cause produces two different messages. You choose which one to send and when.</p>
+
+        <h3>The Decision Framework</h3>
+        <p>Every nontrivial design decision produces four pieces before anything is acted on: <strong>WHAT</strong> is being decided, <strong>HOW</strong> the approach works, <strong>WHY</strong> this approach was chosen, and <strong>WHY NOT</strong> the alternatives — named and rejected, with reasons. Presenting one option without naming what was considered is not a decision. It is a suggestion. The framework forces the work to show and gives you something concrete to correct.</p>
+
+        <h3>The Vault</h3>
+        <p>The vault is your personal knowledge base, backed by Obsidian and git. Skills depend on it. The system map at <code>01-system-map/</code> holds client files, pipeline files, architecture docs, and schema knowledge. When <code>/{prefix}-ticket</code> orients on a client ticket, it reads the client file here. When <code>/{prefix}-support</code> traces a bug, it checks the pipeline file. Without the system map, every investigation starts from scratch.</p>
+
+        <h3>Reusable Scripts</h3>
+        <p>The <code>${PREFIX}_SCRIPTS</code> folder stores scripts Claude generates for recurring tasks. If Claude writes a Python or bash script for a task and the same task comes up again, it runs the saved file instead of regenerating code or making a new API call. Scripts accumulate into a typed, audited library — each following the coding standards: type hints, named constants, file header with ticket reference.</p>
+
+        <h3>Adapting the System</h3>
+        <p>Arbiter was built for a specific context — data integration at a health AI company working with Databricks, Delta Lake, and Unity Catalog — but most of it is universal. The voice standard, the decision framework, the skill chain model, the session frame, and the memory feedback loop transfer to any domain without changes. The pipeline standards and skill implementations reference specific tables and catalog names — adapt those to your stack. Start with <code>CLAUDE.md</code>: fill in your role, your stack, and your domain. The behavior rules and guardrails below that section take effect immediately.</p>
+      </section>
+
+    </div><!-- content-inner -->
+  </main>
+</div>
+
+<script>
+(function() {
+  const btn = document.getElementById('theme-btn');
+  const root = document.documentElement;
+
+  function applyTheme(t) {
+    if (t === 'dark') { root.setAttribute('data-theme','dark'); btn.textContent='☀︎'; }
+    else if (t === 'light') { root.setAttribute('data-theme','light'); btn.textContent='☾'; }
+    else { root.removeAttribute('data-theme'); btn.textContent='☾'; }
+  }
+
+  const saved = localStorage.getItem('arbiter-theme');
+  if (saved) applyTheme(saved);
+
+  btn.addEventListener('click', function() {
+    const cur = root.getAttribute('data-theme');
+    const next = (cur === 'dark') ? 'light' : 'dark';
+    applyTheme(next);
+    try { localStorage.setItem('arbiter-theme', next); } catch(e) {}
+  });
+
+  // Active nav via IntersectionObserver
+  const sections = document.querySelectorAll('section[id]');
+  const links = document.querySelectorAll('.nav-a');
+  const io = new IntersectionObserver(function(entries) {
+    entries.forEach(function(e) {
+      if (e.isIntersecting) {
+        const id = e.target.getAttribute('id');
+        links.forEach(function(l) {
+          l.classList.toggle('active', l.getAttribute('href') === '#' + id);
+        });
+      }
+    });
+  }, { rootMargin: '-15% 0px -75% 0px', threshold: 0 });
+
+  sections.forEach(function(s) { io.observe(s); });
+})();
+</script>
