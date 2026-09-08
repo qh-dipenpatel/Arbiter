@@ -26,7 +26,7 @@ Pull: title, description, acceptance criteria, all comments, status, priority, p
 subtasks, issuetype.
 
 
-**1c — Vault**
+**1b — Vault**
 - `02-tickets/{KEY}/{KEY}-state.md` — if found and status is SUPPORT_COMPLETE or
   higher, surface the handoff block and skip re-orienting; proceed to CLASSIFY with
   existing chain context

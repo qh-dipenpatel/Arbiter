@@ -671,7 +671,7 @@ if [ "$SIMPLE_MODE" = false ]; then
   echo ""
 fi
 
-SLUG=$(echo "$HOME" | sed 's|/|-|g')
+SLUG=$(echo "$REPO_DIR" | sed 's|/|-|g')
 MEMORY_TARGET="$CLAUDE_DIR/projects/$SLUG/memory"
 
 mkdir -p "$CLAUDE_DIR" "$(dirname "$MEMORY_TARGET")"

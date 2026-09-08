@@ -131,9 +131,9 @@ the state file. Ticket closing? Close all associated ephemeral facts.
 `03-knowledge-base/patterns/YYYY-MM-DD-[topic].md`
 
 **Conversation file** (always — every session):
-`05-conversations/YYYY/MM-Month/YYYY-MM-DD-NN-topic.md`
+`05-claude-conversations/YYYY/MM-Month/YYYY-MM-DD-NN-topic.md`
 
-> `05-conversations/` is gitignored — never stage or commit these files.
+> `05-claude-conversations/` is gitignored — never stage or commit these files.
 
 - `NN` = session number for the day — check existing files to determine next number
 - `topic` = 2–4 word slug; create folder if missing

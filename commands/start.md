@@ -87,7 +87,10 @@ Read `02-tickets/delta.json`. Extract `last_sync` and `tickets` map.
 
 Tool: `mcp__claude_ai_Atlassian__searchJiraIssuesUsingJql`
 
-- cloudId: `d4233eef-ba28-423d-a306-91a41009573c`
+- cloudId: retrieved dynamically, see step below
+
+Call mcp__atlassian__getAccessibleAtlassianResources first to retrieve the cloudId for this user's Atlassian instance. Use that value in the searchJiraIssuesUsingJql call.
+
 - jql: `assignee = currentUser() AND updated > "{last_sync}" ORDER BY updated DESC`
 - fields: `summary, status, priority, updated, comment, issuetype`
 - maxResults: 50

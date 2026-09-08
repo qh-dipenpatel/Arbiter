@@ -47,8 +47,9 @@ git -C [READ_ONLY_REPO_PATH] remote get-url origin
 git -C [READ_ONLY_REPO_PATH] branch --show-current
 git -C [READ_ONLY_REPO_PATH] log --oneline main..HEAD
 
+# Replace [your DEV_DIR] with the path from your shell profile ($DP_DEV or equivalent)
 # List per-block proposed diffs from /qh-dev
-ls -la ~/Developer/qh-code-temp/PROPOSED_*_{KEY}/Block_*/
+ls -la [your DEV_DIR]/qh-code-temp/PROPOSED_*_{KEY}/Block_*/
 ```
 
 Aggregate the merged diff:
@@ -64,7 +65,7 @@ Do not gate here — Step 0 is informational.
 - If `state.md` Status is not `DEV_COMPLETE`: **STOP** — say "Implementation incomplete. Run /qh-dev for the remaining block(s) before /qh-qa." Do not proceed.
 - If `spec.md` lacks `Approved` line: **STOP** — route to /qh-spec.
 - If `design.md` lacks `Approved` line: **STOP** — route to /qh-arch.
-- If `~/Developer/qh-code-temp/PROPOSED_*_{KEY}/Block_*/` is missing or empty: **STOP** — route to /qh-dev.
+- If `[your DEV_DIR]/qh-code-temp/PROPOSED_*_{KEY}/Block_*/` is missing or empty: **STOP** — route to /qh-dev.
 
 ---
 
@@ -83,7 +84,7 @@ For every function, class, variable, parameter, table, column, or file that was 
 ```bash
 grep -rn "[changed name]" [READ_ONLY_REPO_PATH] \
   --include="*.py" --include="*.ipynb" --include="*.yaml" --include="*.yml" --include="*.sql"
-grep -rn "[changed name]" ~/Developer/qh-code-temp/PROPOSED_*_{KEY}/
+grep -rn "[changed name]" [your DEV_DIR]/qh-code-temp/PROPOSED_*_{KEY}/
 ```
 
 For each hit verify:
@@ -263,7 +264,7 @@ Produce a focused prompt for {NAME} to paste into Cursor. Cursor must see the sa
 Act as an adversary. Find what will go wrong with this implementation.
 
 Inputs:
-- Merged diff: ~/Developer/qh-code-temp/PROPOSED_{YYYY-MM-DD}_{KEY}/Block_*/Block_B-*-DIFF.md
+- Merged diff: [your DEV_DIR]/qh-code-temp/PROPOSED_{YYYY-MM-DD}_{KEY}/Block_*/Block_B-*-DIFF.md
 - Spec: 02-tickets/{KEY}/{KEY}-spec.md (Status APPROVED)
 - Design: 02-tickets/{KEY}/{KEY}-design.md (Status APPROVED)
 - Edge-case validation: 02-tickets/{KEY}/{KEY}-edge-case-validation.md (Status VALIDATED)
@@ -646,7 +647,7 @@ APPROVED case:
   /qh-qa APPROVED {YYYY-MM-DD} (Round {N}). Zero CRITICAL, zero HIGH.
   All MEDIUM findings closed in session. Compliance Gate PASS.
   Implementation ready for commit + PR. Apply DIFFs from
-  ~/Developer/qh-code-temp/PROPOSED_{DATE}_{KEY}/ to the read-only repo
+  [your DEV_DIR]/qh-code-temp/PROPOSED_{DATE}_{KEY}/ to the read-only repo
   manually. Commit format: DJP | {KEY} | imperative summary.
 
 BLOCKED with DEV findings:
@@ -716,7 +717,7 @@ Standards-anchored, not subjective. Apply this table to every finding:
 | `design.md` is not APPROVED | Route to /qh-arch — "design is not approved" |
 | `edge-case-validation.md` is missing or not VALIDATED | Route to /qh-dev — "chain-level Gate 3 must complete first" |
 | `state.md` Status is not DEV_COMPLETE | Route to /qh-dev — "implementation incomplete" |
-| `~/Developer/qh-code-temp/PROPOSED_*_{KEY}/Block_*/` is missing or empty | Route to /qh-dev — "no proposed diff to review" |
+| `[your DEV_DIR]/qh-code-temp/PROPOSED_*_{KEY}/Block_*/` is missing or empty | Route to /qh-dev — "no proposed diff to review" |
 
 Hard rules that fire during execution:
 
