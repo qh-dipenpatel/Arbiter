@@ -203,6 +203,8 @@ echo "    5.  Connect each service: MCP browser auth or API token"
 echo "    6.  Generate credentials loader (Keychain, no tokens in files)"
 echo "    7.  Configure MCP servers"
 echo "    8.  Add environment variables to your shell profile"
+echo "    9.  Wire Claude Code hooks (vault search, secret scrubbing)"
+echo "    10. Install Python deps and build the initial vault search index"
 echo ""
 echo "  Read docs/prerequisites.md before continuing."
 echo "  Press Enter to accept defaults shown in [brackets]."
@@ -784,9 +786,10 @@ fi
 # ── Notion ───────────────────────────────────────────────────────────────────
 echo ""
 echo "  ── Notion (optional) ──"
-dim "  Requires a Notion integration token from notion.so/my-integrations."
+dim "  MCP: browser OAuth on first use, no token needed."
+dim "  API: requires an integration token from notion.so/my-integrations."
 
-choose_connection "Notion" "no"
+choose_connection "Notion" "yes"
 NOTION_METHOD="$CONNECTION_CHOICE"
 
 if [ "$NOTION_METHOD" = "api" ]; then
@@ -886,8 +889,14 @@ if [ "$SLACK_METHOD" = "api" ]; then
     },"
 fi
 
-# Notion block (API only)
-if [ "$NOTION_METHOD" = "api" ]; then
+# Notion block
+if [ "$NOTION_METHOD" = "mcp" ]; then
+  MCP_SERVERS="${MCP_SERVERS}
+    \"notion\": {
+      \"command\": \"/bin/bash\",
+      \"args\": [\"-c\", \"exec npx -y mcp-remote https://api.notion.com/mcp\"]
+    },"
+elif [ "$NOTION_METHOD" = "api" ]; then
   MCP_SERVERS="${MCP_SERVERS}
     \"notion\": {
       \"command\": \"/bin/bash\",
@@ -1018,6 +1027,9 @@ echo ""
 
 if [ "$ATLASSIAN_METHOD" = "mcp" ]; then
   note "Atlassian: a browser will open to authorize on first Claude Code use."
+fi
+if [ "$NOTION_METHOD" = "mcp" ]; then
+  note "Notion: a browser will open to authorize on first Claude Code use."
 fi
 
 echo ""
