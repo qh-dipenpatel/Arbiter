@@ -253,7 +253,7 @@ if [ -d "$CLAUDE_DIR" ] && [ "$(ls -A "$CLAUDE_DIR" 2>/dev/null)" ]; then
   EXISTING_MEMORIES=0
 
   [ -d "$CLAUDE_DIR/commands" ] && EXISTING_COMMANDS=$(_count_files "$CLAUDE_DIR/commands")
-  EXISTING_MEMORIES=$(find "$CLAUDE_DIR/projects" -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
+  EXISTING_MEMORIES=$(find "$CLAUDE_DIR/projects" -name "*.md" 2>/dev/null | wc -l | tr -d ' ' || echo "0")
 
   TICKET_FILE=$(ls "$CLAUDE_DIR/commands/"*-ticket.md 2>/dev/null | head -1 || echo "")
   [ -n "$TICKET_FILE" ] && DETECTED_PREFIX=$(basename "$TICKET_FILE" | sed 's/-ticket\.md//')
@@ -329,8 +329,10 @@ if [ -d "$CLAUDE_DIR" ] && [ "$(ls -A "$CLAUDE_DIR" 2>/dev/null)" ]; then
 
   # Backup always, before any changes
   BACKUP_DIR="$HOME/.claude.backup.$(date +%Y%m%d%H%M%S)"
-  cp -r "$CLAUDE_DIR" "$BACKUP_DIR"
-  ok "Backed up existing setup to: $BACKUP_DIR"
+  cp -rL "$CLAUDE_DIR" "$BACKUP_DIR" 2>/dev/null \
+    || cp -r "$CLAUDE_DIR" "$BACKUP_DIR" 2>/dev/null \
+    || { note "Could not fully back up $CLAUDE_DIR — continuing anyway (original untouched)."; BACKUP_DIR=""; }
+  [ -n "$BACKUP_DIR" ] && ok "Backed up existing setup to: $BACKUP_DIR"
   echo ""
 
   if [ "$INSTALL_MODE" = "clean" ]; then
@@ -396,7 +398,7 @@ if [ -d "$CLAUDE_DIR" ] && [ "$(ls -A "$CLAUDE_DIR" 2>/dev/null)" ]; then
       fi
     fi
     echo ""
-    _mem_count=$(find "$BACKUP_DIR/projects" -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
+    _mem_count=$([ -n "$BACKUP_DIR" ] && find "$BACKUP_DIR/projects" -name "*.md" 2>/dev/null | wc -l | tr -d ' ' || echo "0")
     echo "  Memory files:"
     printf "    %s feedback memory files found — all preserved.\n" "$_mem_count"
     echo ""
