@@ -123,9 +123,11 @@ claude-dotfiles/
 ├── hooks/                        ← Claude Code hooks (wired in settings.json)
 │   ├── vault_search_hook.sh      ← UserPromptSubmit: auto-queries vault before every prompt
 │   ├── scrub-secrets.sh          ← PostToolUse(Bash): strips credentials from tool output
-│   ├── scrub-secrets.py          ← called by scrub-secrets.sh, scans for 13 credential patterns
+│   ├── scrub-secrets.py          ← called by scrub-secrets.sh, scans for 14 credential patterns
 │   ├── precompact_hook.sh        ← PreCompact: reminds Claude to /save before compression
 │   └── pre-commit-secrets        ← git pre-commit hook: blocks token commits in any repo
+│                                    10 patterns: Jira, Slack, Anthropic, OpenAI, Databricks PAT,
+│                                    GitHub (fine-grained + classic), Azure storage, PEM headers
 │                                    install: cp hooks/pre-commit-secrets <repo>/.git/hooks/pre-commit
 │
 ├── rag/                          ← vault search pipeline
