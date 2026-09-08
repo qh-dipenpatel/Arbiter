@@ -20,8 +20,10 @@ A Claude Code configuration that turns Claude from a general assistant into a sp
 | `commands/` | Skill files. Each one is a `/command` you invoke in Claude Code. |
 | `lenses/` | Perspective files for `/lens`. Each one shifts how Claude frames a problem. |
 | `memory/` | Personal feedback memories. Accumulate as you work and correct Claude. |
+| `hooks/` | Claude Code hooks. `vault_search_hook.sh` injects vault context before every prompt. `scrub-secrets.*` redacts credentials from tool output. `precompact_hook.sh` warns before context compression. `pre-commit-secrets` blocks token commits. |
+| `rag/` | Retrieval scripts. `build_index.py` indexes your vault into ChromaDB. `query_index.py` retrieves relevant chunks with cross-encoder reranking. |
 | `cursor-rules/` | Cursor IDE policy files for the secondary review workflow. |
-| `settings.json` | Permission rules for Claude Code. Edit to add tools you use. |
+| `settings.json` | Permission rules and hook wiring for Claude Code. |
 | `settings.local.json` | MCP server credentials. Fill in your tokens. Never commit this file. |
 | `docs/` | Guides for setup, system design, and worked examples. |
 
@@ -72,7 +74,7 @@ cd ~/Developer/dipen/dp-dotfiles
 ./install.sh
 ```
 
-The installer collects your identity, sets up folder locations, creates the vault, installs symlinks, stores API tokens in the OS credential store (macOS Keychain, Linux Secret Service, or Windows Credential Manager, never in files), and wires up the MCP servers.
+The installer collects your identity, sets up folder locations, creates the vault, installs symlinks, stores API tokens in the OS credential store (macOS Keychain, Linux Secret Service, or Windows Credential Manager, never in files), wires up the MCP servers, and builds the initial vault search index. Python 3.9+ is required for the RAG pipeline (the installer runs `pip install` automatically).
 
 After it runs:
 
@@ -80,6 +82,7 @@ After it runs:
 source ~/.zshrc        # reload your shell
 code .                 # open VSCode
 # In Claude Code: /start
+# Vault search is live — every prompt now auto-queries your index
 ```
 
 Full setup details: [docs/setup.md](docs/setup.md)

@@ -120,6 +120,19 @@ claude-dotfiles/
 │   └── MEMORY.md                 ← index of all memory files
 │                                    symlinked into ~/.claude/projects/.../memory/
 │
+├── hooks/                        ← Claude Code hooks (wired in settings.json)
+│   ├── vault_search_hook.sh      ← UserPromptSubmit: auto-queries vault before every prompt
+│   ├── scrub-secrets.sh          ← PostToolUse(Bash): strips credentials from tool output
+│   ├── scrub-secrets.py          ← called by scrub-secrets.sh, scans for 13 credential patterns
+│   ├── precompact_hook.sh        ← PreCompact: reminds Claude to /save before compression
+│   └── pre-commit-secrets        ← git pre-commit hook: blocks token commits in any repo
+│                                    install: cp hooks/pre-commit-secrets <repo>/.git/hooks/pre-commit
+│
+├── rag/                          ← vault search pipeline
+│   ├── build_index.py            ← indexes vault into ChromaDB (all-MiniLM-L6-v2, 150-word chunks)
+│   └── query_index.py            ← retrieves chunks: vector search + cross-encoder reranking
+│                                    called by vault_search_hook.sh on every prompt
+│
 ├── cursor-rules/                 ← Cursor IDE policy (optional, advanced)
 │   ├── 00-policy.mdc
 │   └── 01-context.mdc
@@ -198,11 +211,15 @@ claude-dotfiles/
 
 ---
 
-## 3. Your Vault: ${PREFIX}_KNOWLEDGE
+## 3. Your Vault: ${PREFIX}_KNOWLEDGE and $ARBITER_KNOWLEDGE
 
 > Your Obsidian knowledge base. Local only, not git tracked. Skills read from and write to this every session.
 >
-> Env var derives from prefix: `qh` gives `$QH_KNOWLEDGE`, `dp` gives `$DP_KNOWLEDGE`.
+> Two env vars point to the same vault path after install:
+> - `${PREFIX}_KNOWLEDGE`: prefixed var used by skills (e.g. `$QH_KNOWLEDGE`, `$DP_KNOWLEDGE`)
+> - `ARBITER_KNOWLEDGE`: fixed name used by hooks and the RAG pipeline regardless of prefix
+>
+> The vault search index lives at `$ARBITER_KNOWLEDGE/.rag_index` (not git tracked).
 
 ```
 dp-knowledge/
@@ -301,10 +318,11 @@ When `/{prefix}-spec` starts, it reads this file. It knows the root cause, the c
 |---|---|---|---|
 | Skill files | `commands/*.md` | `~/.claude/commands/` | install.sh (with substitution) |
 | Behavior rules | `CLAUDE.md` | `~/.claude/CLAUDE.md` | install.sh (with identity) |
-| Permissions | `settings.json` | `~/.claude/settings.json` | symlink |
+| Permissions and hooks | `settings.json` | `~/.claude/settings.json` | install.sh |
 | MCP config | `settings.local.json` | `~/.claude/settings.local.json` | install.sh |
 | Token loader | not in repo | `~/.claude/credentials.sh` | install.sh |
 | Feedback memories | `memory/` | `~/.claude/projects/.../memory/` | /close (with your approval) |
+| Vault search index | not in repo | `$ARBITER_KNOWLEDGE/.rag_index` | install.sh Step 10, then manually after adding docs |
 | Client knowledge | not in repo | `vault/01-system-map/` | /{prefix}-ticket, /setup-client |
 | Ticket state | not in repo | `vault/02-tickets/{KEY}/` | every skill in the chain |
 | Decisions | not in repo | `vault/03-knowledge-base/` | /close |

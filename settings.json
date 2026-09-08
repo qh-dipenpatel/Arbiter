@@ -1,4 +1,37 @@
 {
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_DOTFILES/hooks/vault_search_hook.sh\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_DOTFILES/hooks/scrub-secrets.sh\""
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_DOTFILES/hooks/precompact_hook.sh\""
+          }
+        ]
+      }
+    ]
+  },
   "permissions": {
     "allow": [
       "mcp__atlassian__getAccessibleAtlassianResources",
@@ -9,9 +42,10 @@
       "Bash(git log:*)",
       "Bash(git diff:*)",
       "Bash(date)",
-      "Bash(find $QH_KNOWLEDGE/**)",
+      "Bash(find $ARBITER_KNOWLEDGE/**)",
       "Bash(find $QH_SCRIPTS/**)",
-      "Read($QH_KNOWLEDGE/**)",
+      "Bash(python3 $CLAUDE_DOTFILES/rag/query_index.py:*)",
+      "Read($ARBITER_KNOWLEDGE/**)",
       "Read($QH_SCRIPTS/**)",
       "Read($CLAUDE_DOTFILES/**)"
     ],

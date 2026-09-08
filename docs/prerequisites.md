@@ -76,7 +76,21 @@ On Linux, the installer uses GNOME Secret Service to store tokens securely. Inst
 
 If `secret-tool` is not available, the installer falls back to a mode-600 file at `~/.claude/.secrets`. This works but is less secure than the Secret Service. Install `secret-tool` when possible.
 
-### 4. Claude Code
+### 4. Python 3.9+
+
+Required for the vault search pipeline (RAG index build and retrieval). The installer runs `pip install chromadb sentence-transformers` automatically, but Python must be present first.
+
+**macOS:** Python 3 ships with Xcode Command Line Tools. Confirm: `python3 --version`. If missing or below 3.9: `brew install python@3.11`
+
+**Linux (Ubuntu/Debian):** `sudo apt install python3 python3-pip`
+
+**Linux (Fedora):** `sudo dnf install python3 python3-pip`
+
+Verify: `python3 --version` and `pip3 --version`
+
+---
+
+### 5. Claude Code
 
 Claude Code is the CLI this system runs on.
 
@@ -90,7 +104,7 @@ claude
 
 Verify: `claude --version`
 
-### 5. VSCode
+### 6. VSCode
 
 Primary editor. Claude Code runs as an extension inside it.
 
@@ -103,7 +117,7 @@ Install the Claude Code extension:
 3. Search "Claude Code"
 4. Install the Anthropic extension
 
-### 6. Obsidian
+### 7. Obsidian
 
 The knowledge vault app. The installer creates your vault folder structure. Point Obsidian at it after setup.
 
@@ -286,6 +300,7 @@ In Claude Code, type `@jira` or `@slack`. If the server is connected, tool autoc
 - [ ] Homebrew installed
 - [ ] Git installed and configured (name and email)
 - [ ] Node.js 18 or higher installed
+- [ ] Python 3.9 or higher installed (`python3 --version`)
 - [ ] Claude Code installed and authenticated (Option A or B above)
 - [ ] VSCode installed with the Claude Code extension
 - [ ] Obsidian installed

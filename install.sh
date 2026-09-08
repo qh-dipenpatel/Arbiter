@@ -936,6 +936,7 @@ ENV_BLOCK="
 export ${PREFIX_UPPER}_KNOWLEDGE=\"${VAULT_DIR}\"
 export ${PREFIX_UPPER}_MEETINGS=\"${MEETINGS_DIR}\"
 export ${PREFIX_UPPER}_SCRIPTS=\"${SCRIPTS_DIR}\"
+export ARBITER_KNOWLEDGE=\"${VAULT_DIR}\"
 export CLAUDE_DOTFILES=\"${REPO_DIR}\"
 [ -f \"\$HOME/.claude/credentials.sh\" ] && source \"\$HOME/.claude/credentials.sh\"
 "
@@ -948,7 +949,46 @@ else
   ok "Added env vars and credentials loader"
 fi
 
-# (Step 10 removed: knowledge vault is local-only, not git tracked)
+# ── Step 10: RAG Index Setup ─────────────────────────────────────────────────
+header "Step 10: RAG Index Setup"
+echo ""
+dim "Installs Python dependencies for vault search (chromadb, sentence-transformers)"
+dim "and builds the initial index. Re-running is safe: only changed files are re-indexed."
+echo ""
+
+RAG_SKIP=false
+
+if ! command -v python3 &>/dev/null; then
+  note "python3 not found — skipping RAG setup. Install Python 3.9+ and re-run install.sh."
+  RAG_SKIP=true
+fi
+
+if [ "$RAG_SKIP" = false ]; then
+  note "Installing Python dependencies (this may take a minute)..."
+  python3 -m pip install --quiet chromadb sentence-transformers 2>&1 | tail -2
+  ok "Dependencies installed: chromadb, sentence-transformers"
+
+  echo ""
+  note "Building initial vault index..."
+  dim "  Model: all-MiniLM-L6-v2 (downloaded on first run, ~90 MB)"
+  dim "  Index: ${VAULT_DIR}/.rag_index"
+  echo ""
+
+  python3 "$REPO_DIR/rag/build_index.py" \
+    --dir "$VAULT_DIR" \
+    --index "$VAULT_DIR/.rag_index" \
+    --full
+
+  ok "Index built: ${VAULT_DIR}/.rag_index"
+  dim "vault_search_hook.sh will use this index on every prompt."
+  dim "Re-index after adding docs: python3 $REPO_DIR/rag/build_index.py --dir $VAULT_DIR --index $VAULT_DIR/.rag_index"
+fi
+
+echo ""
+note "Installing git pre-commit hook (blocks accidental token commits)..."
+note "Run this in each repo you want protected:"
+dim "  cp \"$REPO_DIR/hooks/pre-commit-secrets\" <repo>/.git/hooks/pre-commit && chmod +x <repo>/.git/hooks/pre-commit"
+echo ""
 
 # ════════════════════════════════════════════════════════════════════════════
 echo ""
@@ -984,6 +1024,10 @@ echo ""
 echo "  Next:"
 echo "    1.  Reload shell:         source $SHELL_PROFILE"
 echo "    2.  Open VSCode and run:  /start"
+echo "    3.  Vault search is live — every prompt auto-queries your index"
+echo ""
+echo "  To re-index after adding docs:"
+echo "    python3 $REPO_DIR/rag/build_index.py --dir $VAULT_DIR --index $VAULT_DIR/.rag_index"
 echo ""
 echo "  To add or rotate tokens at any time:  ./install.sh"
 echo "  Worked example:  docs/walkthrough.md"
