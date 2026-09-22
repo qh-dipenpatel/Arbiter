@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_response": {
+    "output": "cluster_id,state\nabc-123,RUNNING\ndef-456,TERMINATED",
+    "exit_code": 0
+  }
+}

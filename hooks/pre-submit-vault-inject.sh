@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# vault_search_hook.sh
-# Author: Dipen Patel
-# Date: 2026-09-08
-# Scope: Claude Code UserPromptSubmit hook. Runs vector search against the vault
-#        before every prompt and injects matching chunks as a <vault_context> block.
-#        Claude sees the context without spending a turn deciding whether to search.
-# Requires: CLAUDE_DOTFILES and ARBITER_KNOWLEDGE env vars (set by install.sh).
+# Trigger: UserPromptSubmit — all (no matcher)
+# Scope: user prompts longer than 25 chars, excluding skill invocations (/command)
+# Action: vector search vault, inject matching chunks as <vault_context> block
+# On result: exit 0 always — never blocks; vault context injected via stdout
+# If filter: none — prompt content is not available at if-evaluation time
 
-QUERY_SCRIPT="${CLAUDE_DOTFILES}/rag/query_index.py"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+QUERY_SCRIPT="${REPO_DIR}/rag/query_index.py"
 INDEX_PATH="${ARBITER_KNOWLEDGE}/.rag_index"
 MIN_SCORE="0.40"
 TOP="3"
 MIN_PROMPT_CHARS=25
 
 # Bail early if env vars or files are missing — never block the prompt
-if [ -z "${CLAUDE_DOTFILES:-}" ] || [ -z "${ARBITER_KNOWLEDGE:-}" ]; then
+if [ -z "${ARBITER_KNOWLEDGE:-}" ]; then
     exit 0
 fi
 
@@ -49,16 +49,21 @@ RESULTS=$(python3 "$QUERY_SCRIPT" "$PROMPT" \
     --min-score "$MIN_SCORE" \
     --index "$INDEX_PATH" 2>/dev/null)
 
-if [ -z "$RESULTS" ] || echo "$RESULTS" | grep -q '"error"'; then
+if [ -z "$RESULTS" ]; then
     exit 0
 fi
 
+# Validate JSON and count results via Python. grep-based '"error"' check is avoided because
+# any vault document mentioning "error" (RCAs, error-handling notes) triggers a false positive.
 RESULT_COUNT=$(echo "$RESULTS" | python3 -c "
 import sys, json
 try:
     data = json.load(sys.stdin)
-    print(len(data))
-except:
+    if not isinstance(data, list):
+        print(0)
+    else:
+        print(len(data))
+except Exception:
     print(0)
 " 2>/dev/null)
 

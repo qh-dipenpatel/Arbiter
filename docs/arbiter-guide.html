@@ -463,7 +463,7 @@ echo $CLAUDE_DOTFILES <span class="cm"># → ~/Developer/dipen/ah-dotfiles</span
 
         <div class="callout ok">
           <div class="callout-title">Vault search is automatic</div>
-          <p>Every prompt is automatically searched against the vault index by <code>hooks/vault_search_hook.sh</code>. Relevant documents appear in the conversation as a <code>&lt;vault_context&gt;</code> block. Re-index after adding new documents: <code>python3 $CLAUDE_DOTFILES/rag/build_index.py --dir $AH_KNOWLEDGE --index $AH_KNOWLEDGE/.rag_index</code></p>
+          <p>Every prompt is automatically searched against the vault index by <code>hooks/pre-submit-vault-inject.sh</code>. Relevant documents appear in the conversation as a <code>&lt;vault_context&gt;</code> block. Re-index after adding new documents: <code>python3 $CLAUDE_DOTFILES/rag/build_index.py --dir $AH_KNOWLEDGE --index $AH_KNOWLEDGE/.rag_index</code></p>
         </div>
       </section>
 

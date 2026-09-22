@@ -1,0 +1,7 @@
+{
+  "tool_name": "Write",
+  "tool_response": {
+    "output": "File written successfully. MRN: 9999999 in content.",
+    "exit_code": 0
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_response": {
+    "output": "encounter_id,mrn,procedure\n1001,MRN: 1234567,TAVR\n1002,MRN: 7654321,CABG",
+    "exit_code": 0
+  }
+}

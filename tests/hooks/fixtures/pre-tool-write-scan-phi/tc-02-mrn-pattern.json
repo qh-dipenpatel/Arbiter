@@ -1,0 +1,1 @@
+{"session_id": "t02", "tool_name": "Write", "tool_input": {"file_path": "/tmp/patient.md", "content": "Patient data: MRN: 1234567\nAdmitted 2026-09-20\nDiagnosis: hypertension"}}
