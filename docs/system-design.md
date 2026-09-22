@@ -117,6 +117,15 @@ What is permitted:
 
 When PHI comes into scope, the skill stops and flags it. You acknowledge before the skill continues.
 
+**Automated enforcement (hook layer):**
+
+Two hooks reinforce this at the tool level, independent of skill behavior:
+
+- `pre-tool-write-scan-phi.py` intercepts every Write, Edit, and MultiEdit call before it reaches disk. If the content contains a PHI pattern (MRN, SSN, DOB, patient ID, NPI, insurance ID), the write is denied. This is a hard enforcement point — the write never executes.
+- `post-tool-bash-scan-secrets.py` intercepts Bash tool output via `additionalContext`. If credentials appear in command output, Claude is warned alongside the raw result. **This is advisory, not enforcement** — PostToolUse hooks cannot suppress results from Claude's context. Claude receives both the raw output and the warning.
+
+`pre-tool-write-scan-phi.py` enforces at the blocking layer. `post-tool-bash-scan-secrets.py` enforces at the advisory layer. Disk writes cannot contain PHI. Tool results that contain credentials reach Claude with a warning attached.
+
 ---
 
 ## The Decision Framework

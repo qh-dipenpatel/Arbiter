@@ -120,20 +120,43 @@ claude-dotfiles/
 │   └── MEMORY.md                 ← index of all memory files
 │                                    symlinked into ~/.claude/projects/.../memory/
 │
-├── hooks/                        ← Claude Code hooks (wired in settings.json)
-│   ├── vault_search_hook.sh      ← UserPromptSubmit: auto-queries vault before every prompt
-│   ├── scrub-secrets.sh          ← PostToolUse(Bash): strips credentials from tool output
-│   ├── scrub-secrets.py          ← called by scrub-secrets.sh, scans for 14 credential patterns
-│   ├── precompact_hook.sh        ← PreCompact: reminds Claude to /save before compression
-│   └── pre-commit-secrets        ← git pre-commit hook: blocks token commits in any repo
-│                                    10 patterns: Jira, Slack, Anthropic, OpenAI, Databricks PAT,
-│                                    GitHub (fine-grained + classic), Azure storage, PEM headers
-│                                    install: cp hooks/pre-commit-secrets <repo>/.git/hooks/pre-commit
+├── hooks/                        ← Claude Code hooks (wired in .claude/settings.json)
+│   │                                Each file header carries five fields:
+│   │                                Trigger / Scope / Action / On result / If filter
+│   │
+│   ├── pre-submit-vault-inject.sh     ← UserPromptSubmit: queries vault RAG index and injects
+│   │                                    matching context into every prompt before Claude reads it
+│   │                                    Path-portable: derives REPO_DIR from BASH_SOURCE[0]
+│   │
+│   ├── post-tool-bash-scan-secrets.py ← PostToolUse(Bash): scans command output for credentials
+│   │                                    before Claude reads it; warns via additionalContext if found
+│   │                                    (advisory — PostToolUse cannot suppress results)
+│   │                                    14 patterns: Anthropic, AWS, Jira, Databricks, GitHub,
+│   │                                    Slack, OpenAI, Azure, PEM, auth headers, export secrets
+│   │                                    Skips Write/Edit/MultiEdit tool output (TOOL_DENYLIST)
+│   │
+│   ├── pre-tool-write-scan-phi.py     ← PreToolUse(Write|Edit|MultiEdit): scans file content
+│   │                                    for PHI patterns before any write reaches disk
+│   │                                    6 patterns: MRN, SSN, DOB, patient ID, NPI, insurance ID
+│   │                                    Blocks with named pattern list if PHI detected
+│   │
+│   ├── pre-tool-write-guard-path.sh   ← PreToolUse(Write|Edit|MultiEdit): blocks writes to
+│   │                                    the read-only code directory ($ARBITER_CODE_DIR)
+│   │                                    Bails silently if env var is unset
+│   │
+│   ├── pre-compact-checkpoint-warn.sh ← PreCompact: prints checkpoint reminder before Claude
+│   │                                    Code compresses the context window
+│   │
+│   └── pre-commit-secrets             ← git pre-commit hook (not a Claude Code hook)
+│                                        Blocks credential commits in any git repo
+│                                        10 patterns: Jira, Slack, Anthropic, OpenAI, Databricks PAT,
+│                                        GitHub (fine-grained + classic), Azure storage, PEM headers
+│                                        install: cp hooks/pre-commit-secrets <repo>/.git/hooks/pre-commit
 │
 ├── rag/                          ← vault search pipeline
 │   ├── build_index.py            ← indexes vault into ChromaDB (all-MiniLM-L6-v2, 150-word chunks)
 │   └── query_index.py            ← retrieves chunks: vector search + cross-encoder reranking
-│                                    called by vault_search_hook.sh on every prompt
+│                                    called by pre-submit-vault-inject.sh on every prompt
 │
 ├── cursor-rules/                 ← Cursor IDE policy (optional, advanced)
 │   ├── 00-policy.mdc
@@ -320,7 +343,8 @@ When `/{prefix}-spec` starts, it reads this file. It knows the root cause, the c
 |---|---|---|---|
 | Skill files | `commands/*.md` | `~/.claude/commands/` | install.sh (with substitution) |
 | Behavior rules | `CLAUDE.md` | `~/.claude/CLAUDE.md` | install.sh (with identity) |
-| Permissions and hooks | `settings.json` | `~/.claude/settings.json` | install.sh |
+| Permissions | `settings.json` | `~/.claude/settings.json` | install.sh |
+| Hook wiring | `settings.json` | `.claude/settings.json` (project-level) | install.sh (Python inline step) |
 | MCP config | `settings.local.json` | `~/.claude/settings.local.json` | install.sh |
 | Token loader | not in repo | `~/.claude/credentials.sh` | install.sh |
 | Feedback memories | `memory/` | `~/.claude/projects/.../memory/` | /close (with your approval) |

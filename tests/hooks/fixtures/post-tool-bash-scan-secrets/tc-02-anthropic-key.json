@@ -1,0 +1,1 @@
+{"session_id": "t02", "tool_name": "Bash", "tool_input": {"command": "cat config.env"}, "tool_response": {"output": "ANTHROPIC_API_KEY=sk-ant-api03-AAABBBCCCDDDEEEFFFGGGHHH123456789012345678901234567890-XXXX\nOTHER_VAR=hello\n"}}

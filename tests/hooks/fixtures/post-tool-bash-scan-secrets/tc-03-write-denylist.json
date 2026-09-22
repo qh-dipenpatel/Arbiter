@@ -1,0 +1,1 @@
+{"session_id": "t03", "tool_name": "Write", "tool_input": {"file_path": "/tmp/out.md", "content": "hello"}, "tool_response": {"output": "File written"}}

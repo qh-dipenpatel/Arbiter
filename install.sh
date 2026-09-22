@@ -204,27 +204,17 @@ echo ""
 read -rp "  Ready? Press Enter to start (or Ctrl-C to exit): "
 echo ""
 
-# ── Quick or Advanced? ────────────────────────────────────────────────────────
-SIMPLE_MODE=true
-
+echo "  Setup mode:"
+echo "    Simple   — auto-configures folders and paths (recommended for most teams)"
+echo "    Advanced — manually set folder paths, code reference dir, and repo cloning"
 echo ""
-echo "  Setup style:"
-echo ""
-echo "    q) Quick    Recommended. Sensible defaults, fewer questions. (~5 min)"
-echo "    a) Advanced Full control over every folder and option. (~10 min)"
-echo ""
-
-while true; do
-  read -rp "  Choice [q/a, default q]: " _mode_input
-  _mode_input="${_mode_input:-q}"
-  _mode_input=$(echo "$_mode_input" | tr '[:upper:]' '[:lower:]')
-  case "$_mode_input" in
-    q) SIMPLE_MODE=true;  break;;
-    a) SIMPLE_MODE=false; break;;
-    *) echo "  Please type q or a.";;
-  esac
-done
-
+_mode_input=""
+read -rp "  Advanced setup? [y/N]: " _mode_input
+if [[ "${_mode_input,,}" == "y" || "${_mode_input,,}" == "yes" ]]; then
+  SIMPLE_MODE=false
+else
+  SIMPLE_MODE=true
+fi
 echo ""
 
 # ── Detect existing setup ─────────────────────────────────────────────────────
@@ -861,6 +851,24 @@ sed \
 
 ok "Profile written for $USER_NAME"
 
+# Optional: read-only code reference directory for path guard hook
+# In simple mode, CODE_DIR is already set to the auto-derived path from Step 2.
+# In advanced mode, the user can override with any path.
+if [ "$SIMPLE_MODE" = false ]; then
+  CODE_DIR=""
+  echo ""
+  note "Code reference directory (optional):"
+  dim "  A read-only directory Claude should never write to (e.g. a local mirror of your repos at latest main)."
+  dim "  The path guard hook blocks any write to this path. Leave blank to skip."
+  read -rp "  Code reference directory [blank to skip]: " _code_dir_input
+  CODE_DIR="${_code_dir_input:-}"
+  if [ -n "$CODE_DIR" ] && [ ! -d "$CODE_DIR" ]; then
+    note "Directory not found — skipping code reference guard."
+    CODE_DIR=""
+  fi
+fi
+echo "CODE_DIR=\"${CODE_DIR:-}\"" >> "$ARBITER_CONFIG"
+
 # ── Step 6: Service Connections ───────────────────────────────────────────────
 if [ "$SIMPLE_MODE" = true ]; then
   header "Connect Your Services"
@@ -1105,6 +1113,7 @@ export ${PREFIX_UPPER}_MEETINGS=\"${MEETINGS_DIR}\"
 export ${PREFIX_UPPER}_SCRIPTS=\"${SCRIPTS_DIR}\"
 export ARBITER_KNOWLEDGE=\"${VAULT_DIR}\"
 export CLAUDE_DOTFILES=\"${REPO_DIR}\"
+export ARBITER_CODE_DIR=\"${CODE_DIR:-}\"
 [ -f \"\$HOME/.claude/credentials.sh\" ] && source \"\$HOME/.claude/credentials.sh\"
 "
 
@@ -1226,6 +1235,43 @@ cat > "$WORKSPACE_FILE" << WORKSPACE
 WORKSPACE
 ok "VS Code workspace created: $WORKSPACE_FILE"
 
+# ── Wire Claude Code hooks ────────────────────────────────────────────────────
+python3 - "$REPO_DIR" <<'PYTHON'
+import json, sys, os
+
+repo = sys.argv[1]
+settings_path = os.path.join(repo, '.claude', 'settings.json')
+
+try:
+    with open(settings_path) as f:
+        settings = json.load(f)
+except Exception:
+    settings = {'permissions': {'allow': [], 'deny': []}}
+
+settings['hooks'] = {
+    'UserPromptSubmit': [
+        {'matcher': '', 'hooks': [{'type': 'command', 'command': '$CLAUDE_DOTFILES/hooks/pre-submit-vault-inject.sh'}]}
+    ],
+    'PreToolUse': [
+        {'matcher': 'Write|Edit|MultiEdit', 'hooks': [{'type': 'command', 'command': '$CLAUDE_DOTFILES/hooks/pre-tool-write-scan-phi.py'}]},
+        {'matcher': 'Write|Edit|MultiEdit', 'hooks': [{'type': 'command', 'command': '$CLAUDE_DOTFILES/hooks/pre-tool-write-guard-path.sh'}]}
+    ],
+    'PostToolUse': [
+        {'matcher': 'Bash', 'hooks': [{'type': 'command', 'command': '$CLAUDE_DOTFILES/hooks/post-tool-bash-scan-secrets.py'}]},
+        {'matcher': '', 'hooks': [{'type': 'command', 'command': '$CLAUDE_DOTFILES/hooks/post-tool-result-scan-phi.py'}]}
+    ],
+    'PreCompact': [
+        {'matcher': '', 'hooks': [{'type': 'command', 'command': '$CLAUDE_DOTFILES/hooks/pre-compact-checkpoint-warn.sh'}]}
+    ]
+}
+
+with open(settings_path, 'w') as f:
+    json.dump(settings, f, indent=2)
+    f.write('\n')
+PYTHON
+ok "Claude Code hooks wired (5 events)"
+dim "  Paths use \$CLAUDE_DOTFILES — re-run install.sh after moving this directory"
+
 echo ""
 echo "  What to do next:"
 echo ""
@@ -1248,5 +1294,8 @@ else
   echo ""
   echo "  To rotate or add tokens at any time:  ./install.sh"
   echo "  Worked example:  docs/walkthrough.md"
+  echo ""
+  echo "  If you move the Arbiter directory:"
+  echo "    Re-run: ./install.sh  (updates hook paths automatically)"
   echo ""
 fi

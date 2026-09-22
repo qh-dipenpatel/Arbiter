@@ -1,0 +1,6 @@
+{
+  "tool_name": "Read",
+  "tool_response": {
+    "content": "patient_id: 84729\nNPI: 1234567890\ninsurance_id: ABC123456\nprocedure: TAVR"
+  }
+}

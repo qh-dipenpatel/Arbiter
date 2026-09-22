@@ -1,0 +1,1 @@
+{"session_id": "t01", "tool_name": "Bash", "tool_input": {"command": "ls -la"}, "tool_response": {"output": "total 24\ndrwxr-xr-x  6 user staff  192 Sep 22 10:00 .\ndrwxr-xr-x  8 user staff  256 Sep 22 09:00 ..\n-rw-r--r--  1 user staff 1024 Sep 22 10:00 install.sh\n"}}

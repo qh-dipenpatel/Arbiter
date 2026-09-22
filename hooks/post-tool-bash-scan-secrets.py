@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
-# scrub-secrets.py — secret scrubber for Claude Code PostToolUse hook.
-# Author: DJP
-# Date: 2026-08-11
-# Scope: Called by scrub-secrets.sh. Reads hook payload from stdin, scans ALL tool output for secrets.
-# Behavior: Exit 0 always. Outputs JSON with decision:block + scrubbed additionalContext when secrets found.
-# Tools excluded (TOOL_DENYLIST): Edit, Write, TodoWrite — internal status only, no external content.
-# Known limit: PostToolUse cannot scrub credentials the user pastes directly into the conversation.
-# Patterns: Anthropic keys, AWS keys, Jira ATATT, Databricks PATs, GitHub tokens and PATs,
-#           Slack tokens, OpenAI keys, Azure storage keys and SAS tokens, PEM private key headers,
-#           auth headers, credential=value pairs (token, client_secret, connection_string, etc.),
-#           export secrets.
+"""
+Trigger: PostToolUse — Bash
+Scope: all Bash tool output before the model sees it; excludes Edit/Write/TodoWrite (TOOL_DENYLIST)
+Action: scan output text for credential patterns, redact matches
+On secrets found: prints JSON with additionalContext containing scrubbed output and warning
+Note: PostToolUse cannot suppress results; additionalContext instructs Claude not to use raw secrets
+If filter: none — Bash matcher already limits scope sufficiently
+"""
 
 import json
 import re
@@ -115,11 +112,6 @@ def main():
 
     result = {
         "hookSpecificOutput": {
-            "hookEventName": "PostToolUse",
-            "decision": "block",
-            "reason": (
-                str(n) + " credential(s) detected in tool output and redacted by security hook."
-            ),
             "additionalContext": additional,
         }
     }

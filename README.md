@@ -20,7 +20,7 @@ A Claude Code configuration that turns Claude from a general assistant into a sp
 | `commands/` | Skill files. Each one is a `/command` you invoke in Claude Code. |
 | `lenses/` | Perspective files for `/lens`. Each one shifts how Claude frames a problem. |
 | `memory/` | Personal feedback memories. Accumulate as you work and correct Claude. |
-| `hooks/` | Claude Code hooks. `vault_search_hook.sh` injects vault context before every prompt. `scrub-secrets.*` redacts credentials from tool output. `precompact_hook.sh` warns before context compression. `pre-commit-secrets` blocks token commits. |
+| `hooks/` | Claude Code hooks, wired in `.claude/settings.json`. `pre-submit-vault-inject.sh` injects vault context before every prompt (UserPromptSubmit). `post-tool-bash-scan-secrets.py` redacts credentials from Bash tool output (PostToolUse). `pre-tool-write-scan-phi.py` blocks PHI from being written to disk (PreToolUse Write/Edit). `pre-tool-write-guard-path.sh` blocks writes to the read-only code directory (PreToolUse Write/Edit). `pre-compact-checkpoint-warn.sh` warns before context compression (PreCompact). `pre-commit-secrets` blocks credential commits in any repo (git hook, not a Claude hook). |
 | `rag/` | Retrieval scripts. `build_index.py` indexes your vault into ChromaDB. `query_index.py` retrieves relevant chunks with cross-encoder reranking. |
 | `cursor-rules/` | Cursor IDE policy files for the secondary review workflow. |
 | `settings.json` | Permission rules and hook wiring for Claude Code. |
@@ -47,6 +47,7 @@ Reference docs (read when you need them):
 | [Skill Chains](docs/skill-chains.md) | Which chain to run for which ticket type, gates, when to stop |
 | [System Design](docs/system-design.md) | Architecture, departments model, how to adapt the system |
 | [File Structure](docs/structure.md) | Where everything lives and how the three locations connect |
+| [Hook Reference](docs/hooks.md) | All six hooks: what each does, when it fires, flow diagrams |
 | [Future Iterations](docs/future.md) | Planned improvements including team-level deployment |
 
 ---
