@@ -66,8 +66,9 @@ python3 $QH_SCRIPTS/session_cost.py \
   --mode=close --tasks "[one-line tasks summary]"
 ```
 
-Capture stdout. If non-zero exit, write `Cost: not tracked (pricing constants not set)`
-and continue.
+Capture stdout. `session_cost.py` is an optional personal script, not shipped with Arbiter.
+If it is absent, write `Cost: not tracked (session_cost.py not installed)`. If it exits
+non-zero, write `Cost: not tracked (pricing constants not set)`. Continue either way.
 
 **Draft the session log entry** for `00-landing/session-log.md`. Do not write yet.
 

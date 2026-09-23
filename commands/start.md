@@ -58,10 +58,14 @@ State which mode is running and what it will load. Wait for confirmation before 
 ## Step 2 — Repo Sync (Item 3)
 
 ```bash
-$QH_SCRIPTS/sync/sync_repos.sh
+if [ -x "$QH_SCRIPTS/sync/sync_repos.sh" ]; then
+  "$QH_SCRIPTS/sync/sync_repos.sh"
+else
+  echo "SKIP: sync_repos.sh not installed in \$QH_SCRIPTS/sync/"
+fi
 ```
 
-Pulls latest `main` for all company repos into the local `company-code/` folder. Fast when up to date. Run every session — no exceptions. Skip gracefully if the script fails; log the skip in the checklist output.
+Arbiter does not ship `sync_repos.sh`; it is a personal script you add to `$QH_SCRIPTS/sync/`. When present, it pulls latest `main` for all company repos into `$ARBITER_CODE_DIR`. Fast when up to date. Run every session — no exceptions. Skip gracefully if the script fails; log the skip in the checklist output.
 
 ---
 
@@ -79,13 +83,21 @@ Confirm your vault directory (`$QH_KNOWLEDGE`) is accessible. Skip gracefully if
 
 Read `02-tickets/delta.json`. Extract `last_sync` and `tickets` map.
 
+**First run (no `delta.json`):** create it as `{"last_sync": null, "tickets": {}}` and run
+the 4b query with jql `assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC`,
+so every open ticket assigned to you gets a stub.
+Say `First sync: pulling all assigned tickets.` in the checklist output.
+
+**Jira not connected:** if the `mcp__atlassian__` tools are unavailable, skip Step 4, do not
+touch `delta.json`, and note `Jira not connected. Re-run install.sh or run /mcp to sign in.`
+
 **Learn mode:** flag only BLOCKED or priority Highest/Critical tickets. Skip all file I/O.
 
 **Weekly mode:** run full sync, then filter output to the relevant client's tickets only.
 
 ### 4b — Pull from Jira
 
-Tool: `mcp__claude_ai_Atlassian__searchJiraIssuesUsingJql`
+Tool: `mcp__atlassian__searchJiraIssuesUsingJql`
 
 - cloudId: retrieved dynamically, see step below
 
@@ -310,10 +322,10 @@ Use wiki links `[[CD-XXX]]` for ticket references so the file joins the vault gr
 ### 6d — Session cost
 
 ```bash
-python3 $QH_SCRIPTS/session_cost.py --mode=start
+[ -f "$QH_SCRIPTS/session_cost.py" ] && python3 "$QH_SCRIPTS/session_cost.py" --mode=start
 ```
 
-Runs silently — no output on success. Idempotent.
+Optional personal script, not shipped with Arbiter. Skip silently if absent. Runs silently on success. Idempotent.
 
 Confirm: `Saved to ~/qh-output/_start/{date}.md and 00-landing/{YYYY}/{MM}/{date}-start.md`
 
