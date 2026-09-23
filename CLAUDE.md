@@ -46,7 +46,7 @@ See `docs/setup.md` for the full setup guide.
 
 ## Vault Context
 
-Every prompt is automatically searched against the vault index by `hooks/vault_search_hook.sh`. When relevant documents are found, they appear in the conversation as a `<vault_context>` block. That content is real retrieved text from your vault, not hallucinated. Treat it as a primary source. If it contradicts your request, say so before proceeding.
+Every prompt is automatically searched against the vault index by `hooks/pre-submit-vault-inject.sh`. When relevant documents are found, they appear in the conversation as a `<vault_context>` block. That content is real retrieved text from your vault, not hallucinated. Treat it as a primary source. If it contradicts your request, say so before proceeding.
 
 Re-index the vault after adding new documents:
 ```

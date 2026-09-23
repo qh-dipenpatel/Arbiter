@@ -120,7 +120,7 @@ claude-dotfiles/
 │   └── MEMORY.md                 ← index of all memory files
 │                                    symlinked into ~/.claude/projects/.../memory/
 │
-├── hooks/                        ← Claude Code hooks (wired in .claude/settings.json)
+├── hooks/                        ← Claude Code hooks (wired in ~/.claude/settings.json)
 │   │                                Each file header carries five fields:
 │   │                                Trigger / Scope / Action / On result / If filter
 │   │
@@ -344,7 +344,7 @@ When `/{prefix}-spec` starts, it reads this file. It knows the root cause, the c
 | Skill files | `commands/*.md` | `~/.claude/commands/` | install.sh (with substitution) |
 | Behavior rules | `CLAUDE.md` | `~/.claude/CLAUDE.md` | install.sh (with identity) |
 | Permissions | `settings.json` | `~/.claude/settings.json` | install.sh |
-| Hook wiring | `settings.json` | `.claude/settings.json` (project-level) | install.sh (Python inline step) |
+| Hook wiring | `settings.json` | `~/.claude/settings.json` (global) | install.sh (Step 4) |
 | MCP config | `settings.local.json` | `~/.claude/settings.local.json` | install.sh |
 | Token loader | not in repo | `~/.claude/credentials.sh` | install.sh |
 | Feedback memories | `memory/` | `~/.claude/projects/.../memory/` | /close (with your approval) |

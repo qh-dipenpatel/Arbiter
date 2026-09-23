@@ -85,4 +85,4 @@ Open VS Code in the Arbiter project directory. Open a Claude Code session.
 - Tier 1 (automated fixture tests): run `bash tests/hooks/run.sh` from the Arbiter directory
 - Tier 2 (this checklist): run manually once per install or after hook changes
 - If TC-W01 fails but vault index exists: check that ARBITER_KNOWLEDGE is exported in your shell profile
-- If TC-W03, TC-W04, or TC-W06 do not block: check that the hooks are in .claude/settings.json (run: `python3 -c "import json; s=json.load(open('.claude/settings.json')); print(list(s.get('hooks',{}).keys()))"`)
+- If TC-W03, TC-W04, or TC-W06 do not block: check that the hooks are in ~/.claude/settings.json (run: `python3 -c "import json, os; s=json.load(open(os.path.expanduser('~/.claude/settings.json'))); print(list(s.get('hooks',{}).keys()))"`)

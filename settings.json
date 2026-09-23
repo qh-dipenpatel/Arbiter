@@ -5,7 +5,27 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_DOTFILES/hooks/vault_search_hook.sh\""
+            "command": "\"$CLAUDE_DOTFILES/hooks/pre-submit-vault-inject.sh\""
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_DOTFILES/hooks/pre-tool-write-scan-phi.py\""
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_DOTFILES/hooks/pre-tool-write-guard-path.sh\""
           }
         ]
       }
@@ -16,7 +36,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_DOTFILES/hooks/scrub-secrets.sh\""
+            "command": "\"$CLAUDE_DOTFILES/hooks/post-tool-bash-scan-secrets.py\""
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_DOTFILES/hooks/post-tool-result-scan-phi.py\""
           }
         ]
       }
@@ -26,7 +54,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_DOTFILES/hooks/precompact_hook.sh\""
+            "command": "\"$CLAUDE_DOTFILES/hooks/pre-compact-checkpoint-warn.sh\""
           }
         ]
       }

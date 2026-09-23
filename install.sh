@@ -666,11 +666,17 @@ MEMORY_TARGET="$CLAUDE_DIR/projects/$SLUG/memory"
 
 mkdir -p "$CLAUDE_DIR" "$(dirname "$MEMORY_TARGET")"
 
+# Global settings carry the hooks, so they fire in every workspace, not only
+# inside this repo. Paths are baked in as absolute values because Claude Code
+# does not expand env vars in permission rules, and a GUI-launched editor may
+# start without the shell profile loaded.
 backup "$CLAUDE_DIR/settings.json"
 sed \
-  -e "s|QH_SCRIPTS|${PREFIX_UPPER}_SCRIPTS|g" \
+  -e "s|\$CLAUDE_DOTFILES|$(_sed_escape "$REPO_DIR")|g" \
+  -e "s|\$ARBITER_KNOWLEDGE|$(_sed_escape "$VAULT_DIR")|g" \
+  -e "s|\$QH_SCRIPTS|$(_sed_escape "$SCRIPTS_DIR")|g" \
   "$REPO_DIR/settings.json" > "$CLAUDE_DIR/settings.json"
-ok "Settings configured"
+ok "Settings configured (hooks active globally)"
 
 symlink "$REPO_DIR/memory" "$MEMORY_TARGET"
 
@@ -1235,42 +1241,28 @@ cat > "$WORKSPACE_FILE" << WORKSPACE
 WORKSPACE
 ok "VS Code workspace created: $WORKSPACE_FILE"
 
-# ── Wire Claude Code hooks ────────────────────────────────────────────────────
-python3 - "$REPO_DIR" <<'PYTHON'
-import json, sys, os
-
-repo = sys.argv[1]
-settings_path = os.path.join(repo, '.claude', 'settings.json')
-
-try:
-    with open(settings_path) as f:
-        settings = json.load(f)
-except Exception:
-    settings = {'permissions': {'allow': [], 'deny': []}}
-
-settings['hooks'] = {
-    'UserPromptSubmit': [
-        {'matcher': '', 'hooks': [{'type': 'command', 'command': '$CLAUDE_DOTFILES/hooks/pre-submit-vault-inject.sh'}]}
-    ],
-    'PreToolUse': [
-        {'matcher': 'Write|Edit|MultiEdit', 'hooks': [{'type': 'command', 'command': '$CLAUDE_DOTFILES/hooks/pre-tool-write-scan-phi.py'}]},
-        {'matcher': 'Write|Edit|MultiEdit', 'hooks': [{'type': 'command', 'command': '$CLAUDE_DOTFILES/hooks/pre-tool-write-guard-path.sh'}]}
-    ],
-    'PostToolUse': [
-        {'matcher': 'Bash', 'hooks': [{'type': 'command', 'command': '$CLAUDE_DOTFILES/hooks/post-tool-bash-scan-secrets.py'}]},
-        {'matcher': '', 'hooks': [{'type': 'command', 'command': '$CLAUDE_DOTFILES/hooks/post-tool-result-scan-phi.py'}]}
-    ],
-    'PreCompact': [
-        {'matcher': '', 'hooks': [{'type': 'command', 'command': '$CLAUDE_DOTFILES/hooks/pre-compact-checkpoint-warn.sh'}]}
-    ]
-}
-
-with open(settings_path, 'w') as f:
-    json.dump(settings, f, indent=2)
-    f.write('\n')
+# ── Verify Claude Code hooks ──────────────────────────────────────────────────
+# Hooks are defined in settings.json and installed globally in Step 4. Confirm
+# every referenced hook exists and is executable; a missing PHI or secrets hook
+# fails silently at runtime, so surface it here instead.
+_hook_missing=$(python3 - "$CLAUDE_DIR/settings.json" <<'PYTHON'
+import json, os, shlex, sys
+settings = json.load(open(sys.argv[1]))
+for groups in settings.get('hooks', {}).values():
+    for group in groups:
+        for hook in group.get('hooks', []):
+            path = shlex.split(hook['command'])[0]
+            if not os.access(path, os.X_OK):
+                print(path)
 PYTHON
-ok "Claude Code hooks wired (5 events)"
-dim "  Paths use \$CLAUDE_DOTFILES — re-run install.sh after moving this directory"
+)
+if [ -z "$_hook_missing" ]; then
+  ok "Claude Code hooks active in all workspaces"
+  dim "  Hook paths point at ${REPO_DIR} — re-run install.sh after moving this directory"
+else
+  while IFS= read -r _hook; do note "Hook missing or not executable: $_hook"; done <<< "$_hook_missing"
+  note "Some hooks will not run. PHI and secrets scanning may be off until fixed."
+fi
 
 echo ""
 echo "  What to do next:"

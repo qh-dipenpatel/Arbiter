@@ -4,7 +4,7 @@ Created by Dipen Patel.
 
 Claude Code hooks are shell or Python scripts that fire at defined points in the agent loop. Arbiter uses six hooks across four events. Each section below shows what the hook does and when it fires.
 
-Hooks are wired in `.claude/settings.json`. Install re-wires them automatically on every run.
+Hooks are defined in the repo `settings.json` and installed globally to `~/.claude/settings.json` with absolute paths. Install re-wires them automatically on every run.
 
 ---
 
@@ -368,7 +368,7 @@ flowchart TD
 ## Adding a new hook
 
 1. Write the script in `hooks/` following the five-field header: Trigger / Scope / Action / On result / If filter.
-2. Add an entry to `.claude/settings.json` under the matching event key.
+2. Add an entry to the repo `settings.json` under the matching event key, then re-run `install.sh`.
 3. Add fixture tests in `tests/hooks/fixtures/{hook-name}/` and update `tests/hooks/run.sh`.
 4. Add a manual wiring test to `tests/hooks/e2e-wiring-checklist.md`.
 5. Update this file with the new section and diagram.
