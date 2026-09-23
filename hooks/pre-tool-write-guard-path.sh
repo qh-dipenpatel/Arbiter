@@ -2,7 +2,7 @@
 # Trigger: PreToolUse — Write|Edit|MultiEdit
 # Scope: file_path in Write/Edit/MultiEdit tool_input; checks against ARBITER_CODE_DIR
 # Action: block writes to the read-only code reference directory
-# On block: prints JSON with permissionDecision:deny + permissionDecisionReason, then exit 0
+# On block: prints JSON with hookEventName + permissionDecision:deny + permissionDecisionReason, then exit 0
 # If filter: none — Write|Edit|MultiEdit matcher limits scope; path check is O(1)
 
 # Feature disabled if ARBITER_CODE_DIR not configured
@@ -39,6 +39,7 @@ if [[ "$FILE_PATH_NORM/" == "$CODE_DIR_PREFIX"* ]] || [[ "$FILE_PATH_NORM" == "$
 import json
 result = {
     'hookSpecificOutput': {
+        'hookEventName': 'PreToolUse',
         'permissionDecision': 'deny',
         'permissionDecisionReason': 'Write blocked: target path is under ARBITER_CODE_DIR (read-only RAG source). Work in your dev directory instead.'
     }

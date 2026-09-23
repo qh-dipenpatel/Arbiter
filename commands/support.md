@@ -393,5 +393,5 @@ The skill stops. Whiteboard is a separate human-driven decision; it does not aut
 - Read schema files in the vault before pipeline code — know what the source provides before blaming the code.
 - Pattern scan is mandatory — never skip it.
 - All three gates fire as designed. Gate 3 is the learning gate — non-negotiable.
-- QH repos are read-only. Active working location comes from the ticket state file, not hardcoded. See Technical Standards Rule 22.
+- {COMPANY} repos are read-only. Active working location comes from the ticket state file, not hardcoded. See Technical Standards Rule 22.
 - Session log and output archive both written — never pick one.

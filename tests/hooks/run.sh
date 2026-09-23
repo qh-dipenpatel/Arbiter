@@ -179,7 +179,16 @@ else
 fi
 
 echo ""
+echo "── unit tests (schema, detection, approval summary, settings merge) ──"
+if python3 -m unittest discover -s "$(dirname "$0")" -p 'test_*.py'; then
+    PASS=$((PASS + 1))
+else
+    FAIL=$((FAIL + 1))
+fi
+
+echo ""
 echo "───────────────────────────────────────────────────────────────"
 echo "Results: $PASS passed, $FAIL failed"
+echo "Live end to end (real Claude session, ~2 min): tests/e2e/run.sh"
 echo ""
 [ "$FAIL" -eq 0 ] && exit 0 || exit 1

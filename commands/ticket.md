@@ -49,7 +49,7 @@ vault and Jira. Leave blanks for anything not found; flag what's missing.
 ```
 CLIENT CONTEXT
   Client:     [client name — or "N/A (internal)" for internal/system tickets]
-  Catalog:    [Unity Catalog name, e.g. qh_chn_dev]
+  Catalog:    [Unity Catalog name, e.g. acme_dev]
   Schema:     [schema name]
   Pipeline:   [Databricks job/pipeline name]
   Notebook:   [notebook path in repo, e.g. databricks/pipelines/clients/chn/...]
@@ -129,7 +129,7 @@ Based on {NAME}'s explain-back, the Jira issuetype, title, and description:
 |---|---|---|
 | **Bug** | issuetype: Bug / Sub-task; "wrong", "null", "incorrect", "mismatch", "not populating", "excluded", "error", "fix" | `/qh-support` → `/qh-spec` → `/qh-arch` → `/qh-dev` → `/qh-qa` |
 | **New Build** | issuetype: Story / Epic; "build", "create", "implement", "add capability" | `/qh-spec` → `/qh-arch` → `/qh-dev` → `/qh-qa` |
-| **Research** | "investigate", "understand", "scope", "explore", "assess", "analyze", "what is" | `/qh-scope` → (confirm) → `/qh-spec` → ... |
+| **Research** | "investigate", "understand", "scope", "explore", "assess", "analyze", "what is" | `/explore` → (confirm) → `/qh-spec` → ... |
 | **Coordination** | "loop in", "unblock", "follow up", "contact", "coordinate", "waiting on" | Handle directly |
 | **Communication** | "notify", "update client", "draft message", "inform" | Handle directly |
 | **Documentation** | "document", "update vault", "write runbook", "capture" | Handle directly |
@@ -182,7 +182,7 @@ Next session starter prompt (copy into a new thread):
 State file at 02-tickets/{KEY}/{KEY}-state.md (Status: ROUTED).
 [One to two sentences naming the first skill, what it produces, and what
 to expect — bug → /qh-support produces handoff; new build → /qh-spec
-produces AC+VS; research → /qh-scope produces scope brief.]
+produces AC+VS; research → /explore produces a scope brief in the vault.]
 
 ═══════════════════════════════════════════════════════════════
 ```
@@ -268,6 +268,6 @@ Update `02-tickets/{KEY}/{KEY}-state.md` with current status.
 - The explain-back gate is the only pause point — {NAME}'s framing drives classification
 - Every classification names the rejected alternative
 - Jira comment drafts follow the three-chapter model
-- QH repos are read-only — never modify
+- {COMPANY} repos are read-only — never modify
 - Never post to Jira, never send Slack — {NAME} does all external actions
 - PHI never enters vault, memory, or commit messages

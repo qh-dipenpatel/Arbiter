@@ -9,6 +9,46 @@ CREDS_SCRIPT="$CLAUDE_DIR/credentials.sh"
 KC_PREFIX="claude-dotfiles"
 OS="$(uname -s)"   # Darwin | Linux | MINGW* | CYGWIN*
 
+# ── Non-interactive mode (automated tests, CI) ────────────────────────────────
+# ./install.sh --non-interactive   or   ARBITER_NONINTERACTIVE=1 ./install.sh
+# Every prompt takes its default. Service connections are skipped. An existing
+# setup is always migrated, never cleaned, so ~/.claude is never wiped unattended.
+for _arg in "$@"; do
+  [ "$_arg" = "--non-interactive" ] && ARBITER_NONINTERACTIVE=1
+done
+ARBITER_NONINTERACTIVE="${ARBITER_NONINTERACTIVE:-0}"
+
+# Prompt reads (read -p / -rp / -rsp) are answered with "" (the default) in
+# non-interactive mode. Reads without -p (while read loops) use the builtin.
+read() {
+  local _a _is_prompt=false _var="REPLY"
+  for _a in "$@"; do
+    [[ "$_a" =~ ^-[a-z]*p[a-z]*$ ]] && _is_prompt=true
+  done
+  if [ "$ARBITER_NONINTERACTIVE" != "1" ] || [ "$_is_prompt" = false ]; then
+    builtin read "$@"
+    return
+  fi
+  _a="${!#}"
+  [[ "$_a" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] && _var="$_a"
+  case "$_var" in
+    _choice) printf -v "$_var" '%s' "m" ;;   # migrate, never clean
+    *)       printf -v "$_var" '%s' "" ;;
+  esac
+  echo "" >&2   # stderr: ask() returns its answer on stdout via $(...)
+}
+
+# ── Python check ──────────────────────────────────────────────────────────────
+# Hooks and the settings merge need python3 >= 3.9. Checked by running it, not by
+# `command -v`: on macOS without Command Line Tools /usr/bin/python3 is a stub
+# that exists but opens an install dialog and fails.
+MIN_PYTHON="3.9"
+if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' >/dev/null 2>&1; then
+  echo "  python3 ${MIN_PYTHON}+ is required (PHI and secrets hooks are written in Python)."
+  echo "  macOS: run  xcode-select --install  then re-run ./install.sh"
+  exit 1
+fi
+
 # Standard skills list (used in migration analysis and custom-skill detection)
 STANDARD_SKILLS="ticket support spec arch dev qa start close draft weekly status learn sync save whiteboard setup-client pull-notes explore lens"
 
@@ -120,6 +160,10 @@ ask_secret() {
 CONNECTION_CHOICE=""
 choose_connection() {
   local service="$1" has_mcp="$2" result
+  if [ "$ARBITER_NONINTERACTIVE" = "1" ]; then
+    CONNECTION_CHOICE="skip"
+    return
+  fi
   echo ""
   if [ "$has_mcp" = "yes" ]; then
     echo "    b) Sign in with your browser   Easiest — a login page opens automatically, no key needed."
@@ -210,7 +254,7 @@ echo "    Advanced — manually set folder paths, code reference dir, and repo c
 echo ""
 _mode_input=""
 read -rp "  Advanced setup? [y/N]: " _mode_input
-if [[ "${_mode_input,,}" == "y" || "${_mode_input,,}" == "yes" ]]; then
+if [[ "$_mode_input" == [yY] || "$_mode_input" == [yY][eE][sS] ]]; then
   SIMPLE_MODE=false
 else
   SIMPLE_MODE=true
@@ -666,11 +710,8 @@ MEMORY_TARGET="$CLAUDE_DIR/projects/$SLUG/memory"
 
 mkdir -p "$CLAUDE_DIR" "$(dirname "$MEMORY_TARGET")"
 
-backup "$CLAUDE_DIR/settings.json"
-sed \
-  -e "s|QH_SCRIPTS|${PREFIX_UPPER}_SCRIPTS|g" \
-  "$REPO_DIR/settings.json" > "$CLAUDE_DIR/settings.json"
-ok "Settings configured"
+# Global settings (hooks, permissions, env) are merged near the end of the
+# install, once every path including CODE_DIR is known. See "Merge settings".
 
 symlink "$REPO_DIR/memory" "$MEMORY_TARGET"
 
@@ -709,6 +750,7 @@ for src_file in "$REPO_DIR/commands/"*.md; do
     -e "s|qh-code/|${SKILL_PREFIX}-code/|g" \
     -e "s|qh-scripts|${SKILL_PREFIX}-scripts|g" \
     -e "s|{NAME}|${USER_NAME_ESC}|g" \
+    -e "s|{COMPANY}|${USER_COMPANY_ESC}|g" \
     "$src_file" > "$CLAUDE_DIR/commands/$dest_name"
   [ "$SIMPLE_MODE" = false ] && ok "Installed: $dest_name"
 done
@@ -1036,61 +1078,47 @@ if [ "$SIMPLE_MODE" = false ]; then
   echo ""
 fi
 
-MCP_SERVERS=""
+# Register servers with the Claude Code CLI at user scope so they apply in
+# every workspace. Browser sign-in uses Claude Code's native HTTP transport
+# (OAuth on first use, no Node needed). API-key servers run through npx.
+ATLASSIAN_MCP_URL="https://mcp.atlassian.com/v1/mcp"
+NOTION_MCP_URL="https://mcp.notion.com/mcp"
+CREDS_SOURCE="source \"\$HOME/.claude/credentials.sh\" 2>/dev/null"
 
-if [ "$ATLASSIAN_METHOD" = "mcp" ]; then
-  MCP_SERVERS="${MCP_SERVERS}
-    \"atlassian\": {
-      \"command\": \"/bin/bash\",
-      \"args\": [\"-c\", \"exec npx -y mcp-remote https://mcp.atlassian.com/v1/sse\"]
-    },"
-elif [ "$ATLASSIAN_METHOD" = "api" ]; then
-  MCP_SERVERS="${MCP_SERVERS}
-    \"atlassian\": {
-      \"command\": \"/bin/bash\",
-      \"args\": [\"-c\", \"source \\\"\\$HOME/.claude/credentials.sh\\\" 2>/dev/null; exec npx -y mcp-remote https://mcp.atlassian.com/v1/sse\"]
-    },"
-fi
-
-if [ "$NOTION_METHOD" = "mcp" ]; then
-  MCP_SERVERS="${MCP_SERVERS}
-    \"notion\": {
-      \"command\": \"/bin/bash\",
-      \"args\": [\"-c\", \"exec npx -y mcp-remote https://api.notion.com/mcp\"]
-    },"
-elif [ "$NOTION_METHOD" = "api" ]; then
-  MCP_SERVERS="${MCP_SERVERS}
-    \"notion\": {
-      \"command\": \"/bin/bash\",
-      \"args\": [\"-c\", \"source \\\"\\$HOME/.claude/credentials.sh\\\" 2>/dev/null; exec npx -y @notionhq/notion-mcp-server\"]
-    },"
-fi
-
-if [ "$SLACK_METHOD" = "api" ]; then
-  MCP_SERVERS="${MCP_SERVERS}
-    \"slack\": {
-      \"command\": \"/bin/bash\",
-      \"args\": [\"-c\", \"source \\\"\\$HOME/.claude/credentials.sh\\\" 2>/dev/null; exec npx -y @modelcontextprotocol/server-slack\"]
-    },"
-fi
-
-MCP_SERVERS="${MCP_SERVERS%,}"
-
-if [ -n "$MCP_SERVERS" ]; then
-  cat > "$REPO_DIR/settings.local.json" << MCPJSON
-{
-  "mcpServers": {${MCP_SERVERS}
-  }
+_mcp_register() {
+  local name="$1"; shift
+  claude mcp remove --scope user "$name" >/dev/null 2>&1 || true
+  if claude mcp add --scope user "$name" "$@" >/dev/null 2>&1; then
+    ok "Connected $name (all workspaces)"
+  else
+    note "Could not register $name. Run later: claude mcp add --scope user $name $*"
+  fi
 }
-MCPJSON
+
+_mcp_register_npx() {
+  local name="$1" package="$2"
+  if ! command -v npx >/dev/null 2>&1; then
+    note "$name needs Node.js (npx not found). Install Node, then re-run install.sh."
+    return
+  fi
+  _mcp_register "$name" -- /bin/bash -c "${CREDS_SOURCE}; exec npx -y ${package}"
+}
+
+if ! command -v claude >/dev/null 2>&1; then
+  note "Claude Code CLI not found, so services were not connected."
+  note "Install Claude Code, then re-run install.sh to connect Jira, Notion, and Slack."
 else
-  cat > "$REPO_DIR/settings.local.json" << 'MCPJSON'
-{
-  "mcpServers": {}
-}
-MCPJSON
+  case "$ATLASSIAN_METHOD" in
+    mcp) _mcp_register atlassian --transport http "$ATLASSIAN_MCP_URL" ;;
+    api) _mcp_register_npx atlassian "mcp-remote ${ATLASSIAN_MCP_URL}" ;;
+  esac
+  case "$NOTION_METHOD" in
+    mcp) _mcp_register notion --transport http "$NOTION_MCP_URL" ;;
+    api) _mcp_register_npx notion "@notionhq/notion-mcp-server" ;;
+  esac
+  [ "$SLACK_METHOD" = "api" ] && _mcp_register_npx slack "@modelcontextprotocol/server-slack"
+  ok "Service connections saved"
 fi
-ok "Service connections saved"
 
 # ── Shell Profile ─────────────────────────────────────────────────────────────
 if [ "$SIMPLE_MODE" = false ]; then
@@ -1098,13 +1126,14 @@ if [ "$SIMPLE_MODE" = false ]; then
   echo ""
 fi
 
-if [ -f "$HOME/.zshrc" ]; then
-  SHELL_PROFILE="$HOME/.zshrc"
-elif [ -f "$HOME/.bashrc" ]; then
-  SHELL_PROFILE="$HOME/.bashrc"
-else
-  SHELL_PROFILE="$HOME/.profile"
-fi
+# Pick the file the user's login shell actually reads. zsh ignores ~/.profile,
+# and macOS Terminal starts bash as a login shell, which reads ~/.bash_profile.
+case "$(basename "${SHELL:-}")" in
+  zsh)  SHELL_PROFILE="$HOME/.zshrc" ;;
+  bash) if [ "$(uname)" = "Darwin" ]; then SHELL_PROFILE="$HOME/.bash_profile"
+        else SHELL_PROFILE="$HOME/.bashrc"; fi ;;
+  *)    SHELL_PROFILE="$HOME/.profile" ;;
+esac
 
 ENV_BLOCK="
 # Arbiter (prefix: ${SKILL_PREFIX})
@@ -1117,17 +1146,20 @@ export ARBITER_CODE_DIR=\"${CODE_DIR:-}\"
 [ -f \"\$HOME/.claude/credentials.sh\" ] && source \"\$HOME/.claude/credentials.sh\"
 "
 
-if grep -q "CLAUDE_DOTFILES" "$SHELL_PROFILE" 2>/dev/null; then
-  ok "Shell profile already configured"
-  if [ "$SIMPLE_MODE" = true ]; then
-    note "If you changed your notes folder, update the path in $SHELL_PROFILE and reload your terminal."
-  else
-    note "To update paths, edit $SHELL_PROFILE and run: source $SHELL_PROFILE"
-  fi
-else
-  printf '%s\n' "$ENV_BLOCK" >> "$SHELL_PROFILE"
-  ok "Shell profile updated: $SHELL_PROFILE"
-fi
+# Replace any earlier Arbiter block (here or in a profile an older install
+# chose) so re-runs pick up moved paths instead of keeping stale values.
+_strip_arbiter_block() {
+  [ -f "$1" ] || return 0
+  grep -q "^# Arbiter (prefix:" "$1" || return 0
+  cp "$1" "$1.bak.$(date +%Y%m%d%H%M%S)"
+  sed -i.arbiter-tmp '/^# Arbiter (prefix:/,/credentials\.sh/d' "$1" && rm -f "$1.arbiter-tmp"
+}
+for _profile in "$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.bashrc" "$HOME/.profile"; do
+  _strip_arbiter_block "$_profile"
+done
+touch "$SHELL_PROFILE"
+printf '%s\n' "$ENV_BLOCK" >> "$SHELL_PROFILE"
+ok "Shell profile updated: $SHELL_PROFILE"
 
 # ── Vault Search Index ────────────────────────────────────────────────────────
 DO_RAG=false
@@ -1235,42 +1267,46 @@ cat > "$WORKSPACE_FILE" << WORKSPACE
 WORKSPACE
 ok "VS Code workspace created: $WORKSPACE_FILE"
 
-# ── Wire Claude Code hooks ────────────────────────────────────────────────────
-python3 - "$REPO_DIR" <<'PYTHON'
-import json, sys, os
+# ── Merge settings ────────────────────────────────────────────────────────────
+# Global settings carry the hooks, so they fire in every workspace, not only
+# inside this repo. Paths are baked in as absolute values because Claude Code
+# does not expand env vars in permission rules. The env block covers editors
+# launched from the Dock, which do not load the shell profile.
+# Merged, not overwritten: the user's own hooks, permissions, env, and other
+# keys are kept (installer/merge_settings.py documents the rules).
+chmod +x "$REPO_DIR"/hooks/*.py "$REPO_DIR"/hooks/*.sh
+# Copy, not backup(): backup() moves the file away, and the merge needs it in place.
+if [ -e "$CLAUDE_DIR/settings.json" ]; then
+  cp -L "$CLAUDE_DIR/settings.json" "$CLAUDE_DIR/settings.json.bak.$(date +%Y%m%d%H%M%S)"
+  note "Backed up: settings.json"
+fi
+python3 "$REPO_DIR/installer/merge_settings.py" \
+  "$REPO_DIR/settings.json" "$CLAUDE_DIR/settings.json" \
+  "$REPO_DIR" "$VAULT_DIR" "$SCRIPTS_DIR" "${CODE_DIR:-}"
+ok "Settings merged (hooks active globally, your own settings kept)"
 
-repo = sys.argv[1]
-settings_path = os.path.join(repo, '.claude', 'settings.json')
-
-try:
-    with open(settings_path) as f:
-        settings = json.load(f)
-except Exception:
-    settings = {'permissions': {'allow': [], 'deny': []}}
-
-settings['hooks'] = {
-    'UserPromptSubmit': [
-        {'matcher': '', 'hooks': [{'type': 'command', 'command': '$CLAUDE_DOTFILES/hooks/pre-submit-vault-inject.sh'}]}
-    ],
-    'PreToolUse': [
-        {'matcher': 'Write|Edit|MultiEdit', 'hooks': [{'type': 'command', 'command': '$CLAUDE_DOTFILES/hooks/pre-tool-write-scan-phi.py'}]},
-        {'matcher': 'Write|Edit|MultiEdit', 'hooks': [{'type': 'command', 'command': '$CLAUDE_DOTFILES/hooks/pre-tool-write-guard-path.sh'}]}
-    ],
-    'PostToolUse': [
-        {'matcher': 'Bash', 'hooks': [{'type': 'command', 'command': '$CLAUDE_DOTFILES/hooks/post-tool-bash-scan-secrets.py'}]},
-        {'matcher': '', 'hooks': [{'type': 'command', 'command': '$CLAUDE_DOTFILES/hooks/post-tool-result-scan-phi.py'}]}
-    ],
-    'PreCompact': [
-        {'matcher': '', 'hooks': [{'type': 'command', 'command': '$CLAUDE_DOTFILES/hooks/pre-compact-checkpoint-warn.sh'}]}
-    ]
-}
-
-with open(settings_path, 'w') as f:
-    json.dump(settings, f, indent=2)
-    f.write('\n')
+# ── Verify Claude Code hooks ──────────────────────────────────────────────────
+# Hooks are defined in settings.json and merged globally above. Confirm
+# every referenced hook exists and is executable; a missing PHI or secrets hook
+# fails silently at runtime, so surface it here instead.
+_hook_missing=$(python3 - "$CLAUDE_DIR/settings.json" <<'PYTHON'
+import json, os, shlex, sys
+settings = json.load(open(sys.argv[1]))
+for groups in settings.get('hooks', {}).values():
+    for group in groups:
+        for hook in group.get('hooks', []):
+            path = shlex.split(hook['command'])[0]
+            if not os.access(path, os.X_OK):
+                print(path)
 PYTHON
-ok "Claude Code hooks wired (5 events)"
-dim "  Paths use \$CLAUDE_DOTFILES — re-run install.sh after moving this directory"
+)
+if [ -z "$_hook_missing" ]; then
+  ok "Claude Code hooks active in all workspaces"
+  dim "  Hook paths point at ${REPO_DIR} — re-run install.sh after moving this directory"
+else
+  while IFS= read -r _hook; do note "Hook missing or not executable: $_hook"; done <<< "$_hook_missing"
+  note "Some hooks will not run. PHI and secrets scanning may be off until fixed."
+fi
 
 echo ""
 echo "  What to do next:"

@@ -161,7 +161,7 @@ After answering, the installer:
 - Copies skill files into `~/.claude/commands/` with your prefix and name substituted in
 - Writes your identity into `~/.claude/CLAUDE.md`
 - Stores API tokens in the OS credential store (macOS Keychain, Linux Secret Service, or Windows Credential Manager, never in any file)
-- Writes `settings.local.json` with MCP server launch commands
+- Registers MCP servers at user scope with `claude mcp add --scope user` (stored in `~/.claude.json`)
 - Adds `$DP_KNOWLEDGE`, `$DP_MEETINGS`, `$DP_SCRIPTS`, and `$CLAUDE_DOTFILES` to your shell profile
 
 ---
@@ -222,7 +222,6 @@ Here is the complete picture with `dipen` as the base and `dp` as the prefix. Ev
 │   ├── standards/                   voice, technical, pipeline, skill rules
 │   ├── CLAUDE.md                    behavior rules template
 │   ├── settings.json
-│   ├── settings.local.json          MCP config (never commit)
 │   ├── memory/                      feedback memories
 │   ├── install.sh
 │   └── docs/
@@ -263,7 +262,6 @@ And what Claude Code reads at runtime:
 ├── CLAUDE.md                        your identity written in
 ├── credentials.sh                   reads tokens from Keychain at runtime
 ├── settings.json
-├── settings.local.json
 └── commands/
     ├── dp-ticket.md                 /dp-ticket
     ├── dp-spec.md                   /dp-spec

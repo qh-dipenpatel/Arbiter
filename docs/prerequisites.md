@@ -272,7 +272,7 @@ MCP servers give Claude Code live access to Jira, Slack, and Notion. After runni
 1. Open the Claude Code panel in VSCode (left sidebar or `Cmd+Shift+P` → "Claude Code")
 2. Click the settings gear icon
 3. Go to "MCP Servers"
-4. The servers defined in `settings.local.json` appear here (slack, atlassian, notion)
+4. The servers registered by install.sh appear here (atlassian, notion, slack). Run `claude mcp list` to see them from a terminal.
 5. Click "Connect" next to each one
 
 ### The Atlassian server uses OAuth

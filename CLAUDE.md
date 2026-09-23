@@ -46,7 +46,7 @@ See `docs/setup.md` for the full setup guide.
 
 ## Vault Context
 
-Every prompt is automatically searched against the vault index by `hooks/vault_search_hook.sh`. When relevant documents are found, they appear in the conversation as a `<vault_context>` block. That content is real retrieved text from your vault, not hallucinated. Treat it as a primary source. If it contradicts your request, say so before proceeding.
+Every prompt is automatically searched against the vault index by `hooks/pre-submit-vault-inject.sh`. When relevant documents are found, they appear in the conversation as a `<vault_context>` block. That content is real retrieved text from your vault, not hallucinated. Treat it as a primary source. If it contradicts your request, say so before proceeding.
 
 Re-index the vault after adding new documents:
 ```
@@ -207,6 +207,13 @@ The goal is to deliver working solutions on time, not perfectly engineered ones.
 - Stop when done. When the acceptance criteria are met, stop. Don't add polish, extra docs, or "while I'm here" changes.
 - Flag unnecessary complexity before building it. If a proposed approach is more complex than the problem requires, say so before building it. Recommend the simpler path.
 - One SPEC per ticket. Don't expand design scope to cover hypothetical future tickets. Design exactly what this ticket needs.
+
+### 13. Databricks data access: summary first, user approves
+Databricks commands that return row data are blocked on the first attempt by the approval hook, which returns a summary of the data requested and an approval code.
+- Show that summary to the user verbatim in chat and ask whether to proceed.
+- Add `ARBITER_DATA_APPROVED=<code>` only after the user approves in chat. Never add it on your own initiative, and never reuse a code for a different command.
+- Give every Databricks command a plain language description of what it pulls and why. That description appears in the summary as "Claude's description".
+- Prefer metadata (catalogs, schemas, tables, columns) before row queries. Row queries should aggregate or select the minimum columns, avoid PHI columns, and include a LIMIT.
 
 ---
 

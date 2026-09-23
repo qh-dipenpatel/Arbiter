@@ -1,7 +1,12 @@
-# Arbiter Hook Wiring — E2E Checklist
+# Arbiter Hook Wiring — Manual Checklist
 
-Run this once after installing Arbiter to verify hooks fire from within a live Claude Code session.
-These tests require an active Claude Code session open in the Arbiter project directory.
+Most of this is now automated by `tests/e2e/run.sh` (real installer, real Claude session, stream assertions).
+Use this checklist for what automation cannot see: what a human sees in the interactive UI.
+Run it once per install and for demos. It needs an interactive Claude Code session.
+
+What the hooks can and cannot do (verified on Claude Code 2.1.220):
+- PreToolUse hooks can block (deny) or require approval (ask) before a tool runs.
+- PostToolUse hooks cannot hide or redact a result. Claude has already received it; the hook adds a warning.
 
 ---
 
@@ -29,9 +34,11 @@ Open VS Code in the Arbiter project directory. Open a Claude Code session.
 **Action:** Ask Claude:
 > Run this command: echo "ANTHROPIC_API_KEY=sk-ant-TESTKEY00000000000000000000000000000000000"
 
-**Pass:** Claude's response shows `[REDACTED:ANTHROPIC_KEY]` in the output, not the raw key string.
+**Pass:** Claude says a security hook detected a credential (type ANTHROPIC_KEY) and does not repeat the raw key.
 
-**Fail:** The raw key string appears in Claude's response.
+**Fail:** No mention of the security hook.
+
+**Note:** The raw key was still delivered to Claude. PostToolUse can warn, not redact.
 
 ---
 
@@ -63,9 +70,7 @@ Open VS Code in the Arbiter project directory. Open a Claude Code session.
 
 **Action:** In a long session (after multiple tool calls), run `/compact`.
 
-**Pass:** A `<precompact_warning>` message appears prompting you to run `/save` before compaction proceeds.
-
-**Fail:** Compaction proceeds with no warning.
+**Status: unverified.** Whether PreCompact stdout is shown to you or to Claude has not been confirmed on the current Claude Code version (docs/hooks.md describes this hook as a no op). Record what you observe; do not treat either outcome as a failure until verified.
 
 ---
 
@@ -74,15 +79,43 @@ Open VS Code in the Arbiter project directory. Open a Claude Code session.
 **Action:** Ask Claude:
 > Run this command: echo "patient_id: 84729, MRN: 1234567, DOB: 03/15/1982"
 
-**Pass:** Claude reports the result was blocked. It names the PHI types detected (MRN, DOB, PATIENT_ID). The raw values do not appear in Claude's response.
+**Expected first:** the Bash PHI hook blocks this command before it runs, because the command text itself contains PHI. That is a pass for `pre-tool-bash-scan-phi.py`.
 
-**Fail:** Claude reads and repeats the patient data without any block message.
+**To test the result hook instead:** ask Claude to `cat` a file that already contains synthetic PHI (the command text is clean, the output is not).
+
+**Pass:** Claude reports a PHI warning naming the types (MRN, DOB, PATIENT_ID) and does not repeat the values.
+
+**Fail:** No PHI warning.
+
+**Note:** The result was still delivered to Claude. PostToolUse warns; it does not block.
+
+---
+
+## TC-W07: PreToolUse Bash — Databricks approval prompt (human view)
+
+**Action:** Ask Claude to run a small Databricks SQL query through `databricks api post /api/2.0/sql/statements`, or `databricks fs cat` on any file.
+
+**Pass:**
+1. The first attempt is blocked, and Claude shows the summary in chat verbatim. The summary includes:
+   - "Databricks data access needs approval"
+   - tables, columns, filter, shape, and LIMIT
+   - PHI columns requested
+   - a PRODUCTION flag for prod catalogs
+   - Claude's description, labeled as Claude's
+   - the SQL
+2. Claude asks before proceeding.
+3. After you say yes, Claude re-runs with `ARBITER_DATA_APPROVED=<code>`, and the Yes/No dialog appears before anything runs.
+
+**Fail:** The command runs without the chat summary, or Claude adds the approval code without asking you.
+
+**Result 2026-09-23 (VS Code extension):** pass with the deny first flow. An earlier plain `ask` version failed: the dialog showed only the command and description, and `systemMessage` appeared only after the command ran.
 
 ---
 
 ## Notes
 
-- Tier 1 (automated fixture tests): run `bash tests/hooks/run.sh` from the Arbiter directory
-- Tier 2 (this checklist): run manually once per install or after hook changes
-- If TC-W01 fails but vault index exists: check that ARBITER_KNOWLEDGE is exported in your shell profile
-- If TC-W03, TC-W04, or TC-W06 do not block: check that the hooks are in .claude/settings.json (run: `python3 -c "import json; s=json.load(open('.claude/settings.json')); print(list(s.get('hooks',{}).keys()))"`)
+- Tier 1 (fixture and unit tests, seconds): `bash tests/hooks/run.sh`
+- Tier 2 (automated end to end, about 2 minutes, a few API calls): `tests/e2e/run.sh`
+- Tier 3 (this checklist): human visible behavior, once per install and for demos
+- If TC-W01 fails but the vault index exists: check that `env.ARBITER_KNOWLEDGE` is set in ~/.claude/settings.json (the installer writes it), then rebuild the index
+- If TC-W03, TC-W04, or TC-W06 do not block: check that the hooks are in ~/.claude/settings.json (run: `python3 -c "import json, os; s=json.load(open(os.path.expanduser('~/.claude/settings.json'))); print(list(s.get('hooks',{}).keys()))"`)

@@ -1,7 +1,7 @@
 # /pull-notes — Gemini Meeting Notes Puller
 
-**Role:** Pull all new Gemini Notes emails from Gmail into local `qh-meetings/` storage and
-update the pull catalog. Does NOT process notes into vault — that is `/meeting`'s job.
+**Role:** Pull all new Gemini Notes emails from Gmail into local `$QH_MEETINGS/` storage and
+update the pull catalog. Does NOT process notes into vault — use `/explore [meeting]` for that.
 
 **Local storage:** `$QH_MEETINGS/`
 **Catalog:** `$QH_MEETINGS/catalog.json`
@@ -22,7 +22,7 @@ update the pull catalog. Does NOT process notes into vault — that is `/meeting
 
 Say:
 > "Pulling Gemini Notes for [N] message ID(s). I will read catalog.json, fetch each message
-> from Gmail by ID, download any new ones to qh-meetings/, and update the catalog."
+> from Gmail by ID, download any new ones to $QH_MEETINGS/, and update the catalog."
 
 No confirmation needed — this command makes no vault changes.
 
@@ -190,11 +190,11 @@ GEMINI NOTES PULL — {timestamp}
   Skipped: {N} already in catalog
   Errors:  {N} (list file IDs or "none")
 
-UNPARSED — ready for /meeting:
+UNPARSED — ready for /explore:
   {email_date}  "{meeting_title}"
   {email_date}  "{meeting_title}"
 
-Run /meeting to process.
+Run /explore [meeting] to process.
 ```
 
 If 0 unparsed entries: say "All pulled notes have been processed."

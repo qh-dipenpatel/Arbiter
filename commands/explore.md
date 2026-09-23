@@ -33,7 +33,7 @@ Use an Explore subagent for deep codebase/doc searches to protect the main conte
 **Vault (read first):** Read relevant files in `$QH_KNOWLEDGE/` directly before any external source. Check `01-system-map/` for existing docs, `02-tickets/` for prior ticket work, and `03-knowledge-base/` for decisions and patterns. Identify vault files to update rather than create new. Focus external reads on gaps not already documented.
 
 **Confluence** — search for existing docs on the topic:
-- Use `mcp__claude_ai_Atlassian__searchConfluenceUsingCql` or `searchAtlassian`
+- Use `mcp__atlassian__searchConfluenceUsingCql` or `searchAtlassian`
 - Read full pages for any relevant results
 
 **Git** — read relevant pipeline code, configs, schema files:
@@ -48,7 +48,7 @@ Use an Explore subagent for deep codebase/doc searches to protect the main conte
 
 **If Slack is not connected:**
 > "Slack MCP not connected — Slack context skipped. Findings may be incomplete.
-> To connect Slack: authenticate via `mcp__claude_ai_Slack__authenticate`."
+> To connect Slack: re-run install.sh and paste a Slack bot token."
 
 **PHI check:** If topic involves client data or patient pipelines — flag PHI/PII implications.
 Stop and wait for acknowledgment before continuing.
@@ -150,7 +150,7 @@ Report exactly which files were created or updated with full paths.
 **Suggested next skill:**
 - Ready to act → suggest `/ticket [ID]` or `/qh-arch [ID]`
 - More to learn → suggest `/explore [next topic]`
-- Meeting notes to process → suggest `/meeting`
+- Meeting notes to process → handle them in this session
 
 ---
 

@@ -488,5 +488,5 @@ The skill stops here. {NAME} copies the starter prompt into a new thread to begi
 - Definition of Done baseline is non-negotiable. Per-spec additions are allowed.
 - All four standards docs read in Step 0 — every invocation, no exceptions.
 - Four gates fire as designed. Gate 4 is the learning gate — non-negotiable.
-- QH repos are read-only. Active working location comes from ticket state, never hardcoded. See Technical Standards Rule 22.
+- {COMPANY} repos are read-only. Active working location comes from ticket state, never hardcoded. See Technical Standards Rule 22.
 - Session log and output archive both written — never pick one.

@@ -115,4 +115,4 @@ Rules:
 
 ## Step 7 — After review
 
-> "After the call, run `/capture` to document outcomes, decisions, and action items from the discussion."
+> "After the call, run `/close` to log outcomes, decisions, and action items from the discussion."
