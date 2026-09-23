@@ -1042,61 +1042,47 @@ if [ "$SIMPLE_MODE" = false ]; then
   echo ""
 fi
 
-MCP_SERVERS=""
+# Register servers with the Claude Code CLI at user scope so they apply in
+# every workspace. Browser sign-in uses Claude Code's native HTTP transport
+# (OAuth on first use, no Node needed). API-key servers run through npx.
+ATLASSIAN_MCP_URL="https://mcp.atlassian.com/v1/mcp"
+NOTION_MCP_URL="https://mcp.notion.com/mcp"
+CREDS_SOURCE="source \"\$HOME/.claude/credentials.sh\" 2>/dev/null"
 
-if [ "$ATLASSIAN_METHOD" = "mcp" ]; then
-  MCP_SERVERS="${MCP_SERVERS}
-    \"atlassian\": {
-      \"command\": \"/bin/bash\",
-      \"args\": [\"-c\", \"exec npx -y mcp-remote https://mcp.atlassian.com/v1/sse\"]
-    },"
-elif [ "$ATLASSIAN_METHOD" = "api" ]; then
-  MCP_SERVERS="${MCP_SERVERS}
-    \"atlassian\": {
-      \"command\": \"/bin/bash\",
-      \"args\": [\"-c\", \"source \\\"\\$HOME/.claude/credentials.sh\\\" 2>/dev/null; exec npx -y mcp-remote https://mcp.atlassian.com/v1/sse\"]
-    },"
-fi
-
-if [ "$NOTION_METHOD" = "mcp" ]; then
-  MCP_SERVERS="${MCP_SERVERS}
-    \"notion\": {
-      \"command\": \"/bin/bash\",
-      \"args\": [\"-c\", \"exec npx -y mcp-remote https://api.notion.com/mcp\"]
-    },"
-elif [ "$NOTION_METHOD" = "api" ]; then
-  MCP_SERVERS="${MCP_SERVERS}
-    \"notion\": {
-      \"command\": \"/bin/bash\",
-      \"args\": [\"-c\", \"source \\\"\\$HOME/.claude/credentials.sh\\\" 2>/dev/null; exec npx -y @notionhq/notion-mcp-server\"]
-    },"
-fi
-
-if [ "$SLACK_METHOD" = "api" ]; then
-  MCP_SERVERS="${MCP_SERVERS}
-    \"slack\": {
-      \"command\": \"/bin/bash\",
-      \"args\": [\"-c\", \"source \\\"\\$HOME/.claude/credentials.sh\\\" 2>/dev/null; exec npx -y @modelcontextprotocol/server-slack\"]
-    },"
-fi
-
-MCP_SERVERS="${MCP_SERVERS%,}"
-
-if [ -n "$MCP_SERVERS" ]; then
-  cat > "$REPO_DIR/settings.local.json" << MCPJSON
-{
-  "mcpServers": {${MCP_SERVERS}
-  }
+_mcp_register() {
+  local name="$1"; shift
+  claude mcp remove --scope user "$name" >/dev/null 2>&1 || true
+  if claude mcp add --scope user "$name" "$@" >/dev/null 2>&1; then
+    ok "Connected $name (all workspaces)"
+  else
+    note "Could not register $name. Run later: claude mcp add --scope user $name $*"
+  fi
 }
-MCPJSON
+
+_mcp_register_npx() {
+  local name="$1" package="$2"
+  if ! command -v npx >/dev/null 2>&1; then
+    note "$name needs Node.js (npx not found). Install Node, then re-run install.sh."
+    return
+  fi
+  _mcp_register "$name" -- /bin/bash -c "${CREDS_SOURCE}; exec npx -y ${package}"
+}
+
+if ! command -v claude >/dev/null 2>&1; then
+  note "Claude Code CLI not found, so services were not connected."
+  note "Install Claude Code, then re-run install.sh to connect Jira, Notion, and Slack."
 else
-  cat > "$REPO_DIR/settings.local.json" << 'MCPJSON'
-{
-  "mcpServers": {}
-}
-MCPJSON
+  case "$ATLASSIAN_METHOD" in
+    mcp) _mcp_register atlassian --transport http "$ATLASSIAN_MCP_URL" ;;
+    api) _mcp_register_npx atlassian "mcp-remote ${ATLASSIAN_MCP_URL}" ;;
+  esac
+  case "$NOTION_METHOD" in
+    mcp) _mcp_register notion --transport http "$NOTION_MCP_URL" ;;
+    api) _mcp_register_npx notion "@notionhq/notion-mcp-server" ;;
+  esac
+  [ "$SLACK_METHOD" = "api" ] && _mcp_register_npx slack "@modelcontextprotocol/server-slack"
+  ok "Service connections saved"
 fi
-ok "Service connections saved"
 
 # ── Shell Profile ─────────────────────────────────────────────────────────────
 if [ "$SIMPLE_MODE" = false ]; then

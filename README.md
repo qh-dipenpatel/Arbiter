@@ -24,7 +24,6 @@ A Claude Code configuration that turns Claude from a general assistant into a sp
 | `rag/` | Retrieval scripts. `build_index.py` indexes your vault into ChromaDB. `query_index.py` retrieves relevant chunks with cross-encoder reranking. |
 | `cursor-rules/` | Cursor IDE policy files for the secondary review workflow. |
 | `settings.json` | Permission rules and hook wiring for Claude Code. |
-| `settings.local.json` | MCP server credentials. Fill in your tokens. Never commit this file. |
 | `docs/` | Guides for setup, system design, and worked examples. |
 
 ---

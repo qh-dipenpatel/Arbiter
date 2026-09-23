@@ -18,7 +18,7 @@ Connections fall into three tiers based on what is available for each service. K
 
 ## Tier 1: MCP Servers
 
-MCP servers are the standard Claude Code connection pattern. Claude calls them as tools during a session. `install.sh` generates `settings.local.json` with the server definitions and stores tokens in your OS credential store.
+MCP servers are the standard Claude Code connection pattern. Claude calls them as tools during a session. `install.sh` registers the servers at user scope with `claude mcp add --scope user` and stores tokens in your OS credential store.
 
 Tokens are never written to disk. They live in macOS Keychain, Linux Secret Service, or Windows Credential Manager.
 
@@ -76,7 +76,7 @@ Arbiter never writes to Slack via MCP. Claude drafts; you send.
 Recent Claude Code releases have broken MCP connections for some services. If a previously working server fails:
 
 1. Disconnect and reconnect in VSCode MCP settings
-2. Re-run `install.sh` to regenerate `settings.local.json` and re-store the token
+2. Re-run `install.sh` to re-register the server and re-store the token
 3. Check `node --version`. MCP servers require Node.js 18 or higher.
 4. If MCP remains broken for a service, use the bridge pattern documented in Tier 3 as a fallback
 
