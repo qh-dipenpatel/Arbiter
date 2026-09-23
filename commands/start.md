@@ -241,7 +241,7 @@ CLIENT: [name]
 
 MEETING NOTES
   [recent folders]  or  Nothing new since last session.
-  To process: run /meeting
+  To process: run /explore [meeting]
 
 What are we working on?
 ```

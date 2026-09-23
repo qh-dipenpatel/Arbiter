@@ -150,7 +150,7 @@ Report exactly which files were created or updated with full paths.
 **Suggested next skill:**
 - Ready to act → suggest `/ticket [ID]` or `/qh-arch [ID]`
 - More to learn → suggest `/explore [next topic]`
-- Meeting notes to process → suggest `/meeting`
+- Meeting notes to process → handle them in this session
 
 ---
 

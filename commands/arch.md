@@ -510,7 +510,7 @@ The skill stops here. {NAME} copies the starter prompt into a new thread to begi
 - Gate 4 is the chain-level Gate 2 — non-negotiable. Three-sentence explain-back required before the starter prompt prints.
 - Stop-and-starter pattern. No auto-chain to /qh-dev.
 - All four standards docs read in Step 0 — every invocation, no exceptions.
-- QH repos are read-only. Active working location comes from ticket state, never hardcoded. Technical Standards Rule 22.
+- {COMPANY} repos are read-only. Active working location comes from ticket state, never hardcoded. Technical Standards Rule 22.
 - No PHI in any artifact. Shape descriptors and synthetic data only in Edge Case Validation tables. Technical Standards Rule 1.
 - Session log and output archive both written — never pick one. Skill Standard Rule 13.
 - Performance numbers are concrete or call out a measurement gate. "Negligible" without a number is not acceptable.

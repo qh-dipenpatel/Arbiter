@@ -472,7 +472,7 @@ PHI leakage scan:
   Comments + docstrings    CLEAN | FINDING
   Commit message draft     CLEAN | FINDING
   Vault writes             CLEAN | FINDING
-  qh-output entries        CLEAN | FINDING
+  output/ entries          CLEAN | FINDING
   Notion drafts            CLEAN | FINDING
   Cursor handoff prompt    CLEAN | FINDING
   Jira comment draft       CLEAN | FINDING

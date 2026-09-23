@@ -65,7 +65,7 @@ Does this advance the core mission: "make informed decisions, separate signal fr
 
 **3. Who does it serve**
 - creator only (personal tool)
-- QH data team (needs to be in a shared repo, documented, runnable without a specific machine)
+- {COMPANY} data team (needs to be in a shared repo, documented, runnable without a specific machine)
 - Clients or clinical team (product-level, needs Engineering coordination)
 This determines scope, distribution, security requirements, and maintenance burden.
 

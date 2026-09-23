@@ -715,6 +715,7 @@ for src_file in "$REPO_DIR/commands/"*.md; do
     -e "s|qh-code/|${SKILL_PREFIX}-code/|g" \
     -e "s|qh-scripts|${SKILL_PREFIX}-scripts|g" \
     -e "s|{NAME}|${USER_NAME_ESC}|g" \
+    -e "s|{COMPANY}|${USER_COMPANY_ESC}|g" \
     "$src_file" > "$CLAUDE_DIR/commands/$dest_name"
   [ "$SIMPLE_MODE" = false ] && ok "Installed: $dest_name"
 done
