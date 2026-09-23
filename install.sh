@@ -9,6 +9,46 @@ CREDS_SCRIPT="$CLAUDE_DIR/credentials.sh"
 KC_PREFIX="claude-dotfiles"
 OS="$(uname -s)"   # Darwin | Linux | MINGW* | CYGWIN*
 
+# ── Non-interactive mode (automated tests, CI) ────────────────────────────────
+# ./install.sh --non-interactive   or   ARBITER_NONINTERACTIVE=1 ./install.sh
+# Every prompt takes its default. Service connections are skipped. An existing
+# setup is always migrated, never cleaned, so ~/.claude is never wiped unattended.
+for _arg in "$@"; do
+  [ "$_arg" = "--non-interactive" ] && ARBITER_NONINTERACTIVE=1
+done
+ARBITER_NONINTERACTIVE="${ARBITER_NONINTERACTIVE:-0}"
+
+# Prompt reads (read -p / -rp / -rsp) are answered with "" (the default) in
+# non-interactive mode. Reads without -p (while read loops) use the builtin.
+read() {
+  local _a _is_prompt=false _var="REPLY"
+  for _a in "$@"; do
+    [[ "$_a" =~ ^-[a-z]*p[a-z]*$ ]] && _is_prompt=true
+  done
+  if [ "$ARBITER_NONINTERACTIVE" != "1" ] || [ "$_is_prompt" = false ]; then
+    builtin read "$@"
+    return
+  fi
+  _a="${!#}"
+  [[ "$_a" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] && _var="$_a"
+  case "$_var" in
+    _choice) printf -v "$_var" '%s' "m" ;;   # migrate, never clean
+    *)       printf -v "$_var" '%s' "" ;;
+  esac
+  echo "" >&2   # stderr: ask() returns its answer on stdout via $(...)
+}
+
+# ── Python check ──────────────────────────────────────────────────────────────
+# Hooks and the settings merge need python3 >= 3.9. Checked by running it, not by
+# `command -v`: on macOS without Command Line Tools /usr/bin/python3 is a stub
+# that exists but opens an install dialog and fails.
+MIN_PYTHON="3.9"
+if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' >/dev/null 2>&1; then
+  echo "  python3 ${MIN_PYTHON}+ is required (PHI and secrets hooks are written in Python)."
+  echo "  macOS: run  xcode-select --install  then re-run ./install.sh"
+  exit 1
+fi
+
 # Standard skills list (used in migration analysis and custom-skill detection)
 STANDARD_SKILLS="ticket support spec arch dev qa start close draft weekly status learn sync save whiteboard setup-client pull-notes explore lens"
 
@@ -120,6 +160,10 @@ ask_secret() {
 CONNECTION_CHOICE=""
 choose_connection() {
   local service="$1" has_mcp="$2" result
+  if [ "$ARBITER_NONINTERACTIVE" = "1" ]; then
+    CONNECTION_CHOICE="skip"
+    return
+  fi
   echo ""
   if [ "$has_mcp" = "yes" ]; then
     echo "    b) Sign in with your browser   Easiest — a login page opens automatically, no key needed."
@@ -666,17 +710,8 @@ MEMORY_TARGET="$CLAUDE_DIR/projects/$SLUG/memory"
 
 mkdir -p "$CLAUDE_DIR" "$(dirname "$MEMORY_TARGET")"
 
-# Global settings carry the hooks, so they fire in every workspace, not only
-# inside this repo. Paths are baked in as absolute values because Claude Code
-# does not expand env vars in permission rules, and a GUI-launched editor may
-# start without the shell profile loaded.
-backup "$CLAUDE_DIR/settings.json"
-sed \
-  -e "s|\$CLAUDE_DOTFILES|$(_sed_escape "$REPO_DIR")|g" \
-  -e "s|\$ARBITER_KNOWLEDGE|$(_sed_escape "$VAULT_DIR")|g" \
-  -e "s|\$QH_SCRIPTS|$(_sed_escape "$SCRIPTS_DIR")|g" \
-  "$REPO_DIR/settings.json" > "$CLAUDE_DIR/settings.json"
-ok "Settings configured (hooks active globally)"
+# Global settings (hooks, permissions, env) are merged near the end of the
+# install, once every path including CODE_DIR is known. See "Merge settings".
 
 symlink "$REPO_DIR/memory" "$MEMORY_TARGET"
 
@@ -1232,8 +1267,26 @@ cat > "$WORKSPACE_FILE" << WORKSPACE
 WORKSPACE
 ok "VS Code workspace created: $WORKSPACE_FILE"
 
+# ── Merge settings ────────────────────────────────────────────────────────────
+# Global settings carry the hooks, so they fire in every workspace, not only
+# inside this repo. Paths are baked in as absolute values because Claude Code
+# does not expand env vars in permission rules. The env block covers editors
+# launched from the Dock, which do not load the shell profile.
+# Merged, not overwritten: the user's own hooks, permissions, env, and other
+# keys are kept (installer/merge_settings.py documents the rules).
+chmod +x "$REPO_DIR"/hooks/*.py "$REPO_DIR"/hooks/*.sh
+# Copy, not backup(): backup() moves the file away, and the merge needs it in place.
+if [ -e "$CLAUDE_DIR/settings.json" ]; then
+  cp -L "$CLAUDE_DIR/settings.json" "$CLAUDE_DIR/settings.json.bak.$(date +%Y%m%d%H%M%S)"
+  note "Backed up: settings.json"
+fi
+python3 "$REPO_DIR/installer/merge_settings.py" \
+  "$REPO_DIR/settings.json" "$CLAUDE_DIR/settings.json" \
+  "$REPO_DIR" "$VAULT_DIR" "$SCRIPTS_DIR" "${CODE_DIR:-}"
+ok "Settings merged (hooks active globally, your own settings kept)"
+
 # ── Verify Claude Code hooks ──────────────────────────────────────────────────
-# Hooks are defined in settings.json and installed globally in Step 4. Confirm
+# Hooks are defined in settings.json and merged globally above. Confirm
 # every referenced hook exists and is executable; a missing PHI or secrets hook
 # fails silently at runtime, so surface it here instead.
 _hook_missing=$(python3 - "$CLAUDE_DIR/settings.json" <<'PYTHON'

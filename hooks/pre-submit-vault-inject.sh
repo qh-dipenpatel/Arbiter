@@ -3,9 +3,11 @@
 # Scope: user prompts longer than 25 chars, excluding skill invocations (/command)
 # Action: vector search vault, inject matching chunks as <vault_context> block
 # On result: exit 0 always — never blocks; vault context injected via stdout
+# PHI: excerpts matching shared PHI patterns (phi_patterns.py) are withheld, never injected
 # If filter: none — prompt content is not available at if-evaluation time
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+HOOKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "$HOOKS_DIR/.." && pwd)"
 
 QUERY_SCRIPT="${REPO_DIR}/rag/query_index.py"
 INDEX_PATH="${ARBITER_KNOWLEDGE}/.rag_index"
@@ -38,8 +40,9 @@ if [ "${#PROMPT}" -lt "$MIN_PROMPT_CHARS" ]; then
     exit 0
 fi
 
-# Skip skill invocations — /start, /ticket, /close, etc. manage their own context
-if echo "$PROMPT" | grep -qE '^\s*/[a-zA-Z]'; then
+# Skip skill invocations — /start, /ticket, /close, etc. manage their own context.
+# First line only: a later line starting with a path must not skip the search.
+if printf '%s\n' "$PROMPT" | head -n 1 | grep -qE '^\s*/[a-zA-Z]'; then
     exit 0
 fi
 
@@ -75,6 +78,8 @@ fi
 # [V] = VERIFIED (decisions, RCA), [D] = DOCUMENTED (tickets, system map), [O] = OBSERVED (meetings)
 echo "$RESULTS" | python3 -c "
 import sys, json
+sys.path.insert(0, sys.argv[1])
+from phi_patterns import scan_for_phi, scan_structured
 
 TIER_ICONS = {1: '[V]', 2: '[D]', 3: '[O]'}
 
@@ -88,13 +93,15 @@ try:
         score = r.get('score', 0)
         file_ = r.get('file', '')
         excerpt = r.get('excerpt', '')[:200].strip()
+        if scan_for_phi([excerpt]) + scan_structured([excerpt]):
+            excerpt = '[excerpt withheld: PHI pattern detected in vault file, review and clean it]'
         lines.append(f\"{icon} {score:.2f}  {file_}\")
         lines.append(f\"  {excerpt}\")
         lines.append('')
     lines.append('</vault_context>')
     print('\n'.join(lines))
-except:
+except Exception:
     sys.exit(0)
-" 2>/dev/null
+" "$HOOKS_DIR" 2>/dev/null
 
 exit 0

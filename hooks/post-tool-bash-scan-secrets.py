@@ -1,45 +1,37 @@
 #!/usr/bin/env python3
 """
-Trigger: PostToolUse — Bash
-Scope: all Bash tool output before the model sees it; excludes Edit/Write/TodoWrite (TOOL_DENYLIST)
+Trigger: PostToolUse — all tools (matcher: ""); internal write tools skipped via TOOL_DENYLIST
+Scope: every tool result (Bash stdout/stderr, Read file content, MCP text) before the model reasons over it
 Action: scan output text for credential patterns, redact matches
-On secrets found: prints JSON with additionalContext containing scrubbed output and warning
-Note: PostToolUse cannot suppress results; additionalContext instructs Claude not to use raw secrets
-If filter: none — Bash matcher already limits scope sufficiently
+On secrets found: prints JSON with hookEventName + additionalContext containing scrubbed output and warning
+Note: PostToolUse cannot suppress results; the model has already received the raw text.
+      additionalContext instructs Claude not to use or repeat raw secrets.
 """
 
+from __future__ import annotations
+
 import json
+import os
 import re
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from phi_patterns import collect_texts  # noqa: E402
 
-def extract_text(resp):
-    if isinstance(resp, str):
-        return resp
-    if isinstance(resp, list):
-        parts = []
-        for item in resp:
-            if isinstance(item, str):
-                parts.append(item)
-            elif isinstance(item, dict):
-                text = item.get("text") or item.get("output") or item.get("content") or ""
-                if isinstance(text, str):
-                    parts.append(text)
-        return "\n".join(p for p in parts if p)
-    if isinstance(resp, dict):
-        for key in ("output", "stdout", "text", "content", "result"):
-            val = resp.get(key)
-            if val:
-                if isinstance(val, str):
-                    return val
-                if isinstance(val, list):
-                    return extract_text(val)
-    return str(resp) if resp else ""
+HOOK_EVENT = "PostToolUse"
+
+
+def extract_text(resp: object) -> str:
+    """Join stdout, stderr, file content, and MCP text; fall back to the raw response."""
+    texts = collect_texts(resp)
+    if texts:
+        return "\n".join(texts)
+    return json.dumps(resp) if resp else ""
 
 
 # Tools whose output cannot contain externally-sourced credentials.
-# Edit/Write/TodoWrite return only internal operation status; no external content flows through them.
-TOOL_DENYLIST = {"Edit", "Write", "TodoWrite"}
+# Write/Edit/MultiEdit/NotebookEdit/TodoWrite return only internal operation status.
+TOOL_DENYLIST = {"Edit", "Write", "MultiEdit", "NotebookEdit", "TodoWrite"}
 
 SECRET_PATTERNS = [
     # Anthropic key must precede the generic sk- pattern so ANTHROPIC_KEY label wins
@@ -112,6 +104,7 @@ def main():
 
     result = {
         "hookSpecificOutput": {
+            "hookEventName": HOOK_EVENT,
             "additionalContext": additional,
         }
     }

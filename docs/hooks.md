@@ -2,9 +2,39 @@
 
 Created by Dipen Patel.
 
-Claude Code hooks are shell or Python scripts that fire at defined points in the agent loop. Arbiter uses six hooks across four events. Each section below shows what the hook does and when it fires.
+Claude Code hooks are shell or Python scripts that fire at defined points in the agent loop. Arbiter uses eight hooks across four events, plus two shared modules (`hooks/phi_patterns.py` for PHI detection and payload text extraction, `hooks/sql_summary.py` for the Databricks approval summary). Each section below shows what the hook does and when it fires.
 
-Hooks are defined in the repo `settings.json` and installed globally to `~/.claude/settings.json` with absolute paths. Install re-wires them automatically on every run.
+Hooks are defined in the repo `settings.json` and merged into `~/.claude/settings.json` with absolute paths by `installer/merge_settings.py`. The merge keeps your own hooks, permissions, env, and other settings, and replaces only Arbiter's hook entries (including stale paths from a moved repo). It also writes an `env` block (`ARBITER_KNOWLEDGE`, `ARBITER_CODE_DIR`, `CLAUDE_DOTFILES`) so hooks work in editors launched without your shell profile.
+
+## Output format (required)
+
+Claude Code validates hook JSON. `hookSpecificOutput` **must** include `hookEventName` matching the event. Without it, Claude Code logs `Hook JSON output validation failed — hookSpecificOutput is missing required field "hookEventName"`, marks the hook as an error, and discards its output: no warning reaches Claude and no deny takes effect. Verified on Claude Code 2.1.220 (2026-09-23). Every Arbiter hook before that date omitted the field, so none of them worked in live sessions even though fixture tests passed.
+
+```json
+{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "..."}}
+{"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "..."}}
+```
+
+UserPromptSubmit and PreCompact hooks here print plain text, which does not need the field.
+
+Real payload shapes (captured live, used by `phi_patterns.collect_texts`):
+- Bash `tool_response`: `{"stdout", "stderr", "interrupted", "isImage", "noOutputExpected"}`
+- Read `tool_response`: `{"type": "text", "file": {"filePath", "content", ...}}`, with the text nested under `file.content`
+
+## What hooks can and cannot do
+
+| Event | Can | Cannot |
+|---|---|---|
+| PreToolUse | Block (`deny`) or require approval (`ask`) before the tool runs. `ask` overrides an allow rule (verified). | See the result |
+| PostToolUse | Add a warning for Claude (`additionalContext`) | Hide, redact, or undo a result. Claude has already received it. |
+
+Controls that must prevent exposure belong in PreToolUse. PostToolUse is a second layer.
+
+## Fail closed vs fail open
+
+- `pre-tool-write-scan-phi.py` **fails closed**. An unreadable payload, an import error, or any exception denies the write.
+- `pre-tool-bash-databricks-ask.py` fails to `ask`.
+- `pre-tool-bash-scan-phi.py` **fails open**, on purpose. Bash is the recovery path when the write hook is broken (see Recovery), and the PostToolUse scanner still checks the output.
 
 ---
 
@@ -78,9 +108,9 @@ flowchart TD
 
 ## 2. post-tool-bash-scan-secrets.py
 
-**Event:** PostToolUse — fires after every Bash tool call.
+**Event:** PostToolUse — fires after every tool call (empty matcher; Write, Edit, MultiEdit, NotebookEdit, and TodoWrite are skipped). Scans Bash stdout and stderr, Read file content, and MCP text.
 
-Scans command output for credentials. When a match is found the hook injects an `additionalContext` warning into Claude's turn with a scrubbed version of the output. **PostToolUse hooks cannot suppress a result from reaching Claude** — the raw output and the warning both reach Claude. The hook instructs Claude not to act on raw credential values.
+Scans tool output for credentials. When a match is found the hook injects an `additionalContext` warning into Claude's turn with a scrubbed copy of the output. It does not redact what Claude received. **PostToolUse hooks cannot suppress a result from reaching Claude** — the raw output and the warning both reach Claude. The hook instructs Claude not to act on raw credential values.
 
 > **Limitation:** Secrets in Bash output reach Claude's context. The hook reduces the risk that Claude will reproduce or forward them, but does not eliminate it.
 
@@ -114,9 +144,9 @@ flowchart TD
 
 ## 3. pre-tool-write-scan-phi.py
 
-**Event:** PreToolUse — fires before Write, Edit, and MultiEdit.
+**Event:** PreToolUse — fires before Write, Edit, MultiEdit, and NotebookEdit.
 
-Scans the content being written to disk for PHI patterns. The write is blocked before it reaches disk if a match is found.
+Scans the content being written to disk for PHI patterns and for PHI columns in CSV or JSON row dumps. The write is blocked before it reaches disk if a match is found. Fails closed.
 
 ```mermaid
 flowchart TD
@@ -346,7 +376,7 @@ flowchart TD
   E["Not intercepted"]
   F["post-tool-result-scan-phi.py fires"]
   G{"PHI pattern detected?"}
-  H["Blocked before Claude reads it"]
+  H["Warning added; result already delivered to Claude"]
   I["Reaches Claude and Anthropic"]
   J["Do not paste PHI into prompts"]
 
@@ -365,12 +395,78 @@ flowchart TD
 
 ---
 
+## 7. pre-tool-bash-scan-phi.py
+
+**Event:** PreToolUse — fires before every Bash command.
+
+Denies commands whose text contains PHI, for example `echo "..." > file`, heredocs, or inline data. Uses the shared patterns in `phi_patterns.py`. Fails open (see Fail closed vs fail open).
+
+## 8. pre-tool-bash-databricks-ask.py
+
+**Event:** PreToolUse — fires before every Bash command. Acts only on Databricks CLI commands that return or copy row data. Verified against Databricks CLI v1.2.1:
+
+- `api post|get` on `/sql/statements`
+- `fs cat`, `fs cp`
+- Genie query commands
+- `jobs get-run-output`, `export-run`
+- `workspace export`, `export-dir`
+- `query-history list`
+
+Metadata commands (catalogs, schemas, tables list/get, `fs ls`) pass through.
+
+**Flow (deny first, then ask):**
+1. First attempt: the hook returns `deny` with a summary and an approval code. The code is an 8 character hash of the exact command.
+2. Claude shows the summary in chat and asks you.
+3. If you approve, Claude re-runs the identical command prefixed with `ARBITER_DATA_APPROVED=<code>`.
+4. The hook checks the code against the command and returns `ask`, so the normal Yes/No dialog appears for your final click.
+
+Any change to the command changes the code, so it is blocked again with a new summary. Approving one query cannot release another.
+
+**Why not a plain `ask`:** in the VS Code extension, no hook output reaches you before the approval click (verified 2026-09-23). `permissionDecisionReason` is not shown in the dialog, and `systemMessage` appears only after the command has run. A `deny` reason reaches Claude immediately, so the summary comes to you through chat. CLAUDE.md guardrail 13 tells Claude never to add the code without your approval. If it did, the code would still be visible in the command in the Yes/No dialog.
+
+The summary covers what is being pulled:
+
+- **Parsed from the command (authoritative):**
+  - tables, with `⚠ PRODUCTION catalog` for `*prod*` catalogs
+  - columns (`SELECT *` is shown as ALL columns)
+  - filter
+  - row level vs aggregated
+  - LIMIT, or `⚠ no LIMIT`
+  - PHI columns requested
+  - write statements flagged `⚠ MODIFIES DATA`
+- **Claude's description:** the Bash description, labeled as model authored.
+- **The SQL**, truncated at 600 characters.
+
+SQL the standard library parser cannot handle (CTEs, subqueries, multiple statements) is shown as "Could not parse, review the SQL below". It never guesses. Command parsing is quote aware, so `cd x && databricks ... | jq` and SQL containing `;` are handled.
+
+## Testing
+
+| Tier | Command | What it proves |
+|---|---|---|
+| 1 | `bash tests/hooks/run.sh` | Fixture tests, plus `tests/hooks/test_hooks.py`: every hook's JSON validated against the schema above, detection cases (including metadata that must stay quiet), approval summaries, settings merge |
+| 2 | `tests/e2e/run.sh` | Real `install.sh --non-interactive` into a temp HOME under macOS `/bin/bash` 3.2, then a real `claude -p` session using only the installed settings. Asserts each hook fired, succeeded, and its output was delivered. About 2 minutes and a few API calls. |
+| 3 | `tests/hooks/e2e-wiring-checklist.md` | What a human sees: approval prompt rendering, vault context |
+
+Run tiers 1 and 2 before shipping any hook change. Tier 1 alone would not have caught the missing `hookEventName`; the schema tests in `test_hooks.py` now do.
+
+Test fixtures must not contain PHI shaped literals. The PHI write hook blocks Claude from writing them, correctly. Assemble values at runtime (`"MR" + "N"`).
+
+## Recovery if a hook breaks
+
+A bug in `pre-tool-write-scan-phi.py` blocks every Write and Edit, including the edit that would fix it, because it fails closed. This happened once during development.
+
+1. Ask Claude to fix the file through Bash (for example a Python one liner). The write hook does not gate Bash.
+2. Or fix it yourself in an editor outside Claude Code.
+3. Last resort: remove the hook's entry from `~/.claude/settings.json`, fix the file, then re-run `install.sh` to restore it.
+
+Then run `bash tests/hooks/run.sh` before continuing.
+
 ## Adding a new hook
 
-1. Write the script in `hooks/` following the five-field header: Trigger / Scope / Action / On result / If filter.
+1. Write the script in `hooks/` following the five-field header: Trigger / Scope / Action / On result / If filter. JSON output must include `hookEventName`.
 2. Add an entry to the repo `settings.json` under the matching event key, then re-run `install.sh`.
-3. Add fixture tests in `tests/hooks/fixtures/{hook-name}/` and update `tests/hooks/run.sh`.
-4. Add a manual wiring test to `tests/hooks/e2e-wiring-checklist.md`.
-5. Update this file with the new section and diagram.
+3. Add schema and behavior tests to `tests/hooks/test_hooks.py` and a scenario to `tests/e2e/`.
+4. Add a human visible check to `tests/hooks/e2e-wiring-checklist.md` if the hook shows anything to the user.
+5. Update this file with the new section.
 
 For the header format and naming convention see `docs/structure.md`.
