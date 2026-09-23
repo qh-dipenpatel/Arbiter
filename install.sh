@@ -1090,13 +1090,14 @@ if [ "$SIMPLE_MODE" = false ]; then
   echo ""
 fi
 
-if [ -f "$HOME/.zshrc" ]; then
-  SHELL_PROFILE="$HOME/.zshrc"
-elif [ -f "$HOME/.bashrc" ]; then
-  SHELL_PROFILE="$HOME/.bashrc"
-else
-  SHELL_PROFILE="$HOME/.profile"
-fi
+# Pick the file the user's login shell actually reads. zsh ignores ~/.profile,
+# and macOS Terminal starts bash as a login shell, which reads ~/.bash_profile.
+case "$(basename "${SHELL:-}")" in
+  zsh)  SHELL_PROFILE="$HOME/.zshrc" ;;
+  bash) if [ "$(uname)" = "Darwin" ]; then SHELL_PROFILE="$HOME/.bash_profile"
+        else SHELL_PROFILE="$HOME/.bashrc"; fi ;;
+  *)    SHELL_PROFILE="$HOME/.profile" ;;
+esac
 
 ENV_BLOCK="
 # Arbiter (prefix: ${SKILL_PREFIX})
@@ -1109,17 +1110,20 @@ export ARBITER_CODE_DIR=\"${CODE_DIR:-}\"
 [ -f \"\$HOME/.claude/credentials.sh\" ] && source \"\$HOME/.claude/credentials.sh\"
 "
 
-if grep -q "CLAUDE_DOTFILES" "$SHELL_PROFILE" 2>/dev/null; then
-  ok "Shell profile already configured"
-  if [ "$SIMPLE_MODE" = true ]; then
-    note "If you changed your notes folder, update the path in $SHELL_PROFILE and reload your terminal."
-  else
-    note "To update paths, edit $SHELL_PROFILE and run: source $SHELL_PROFILE"
-  fi
-else
-  printf '%s\n' "$ENV_BLOCK" >> "$SHELL_PROFILE"
-  ok "Shell profile updated: $SHELL_PROFILE"
-fi
+# Replace any earlier Arbiter block (here or in a profile an older install
+# chose) so re-runs pick up moved paths instead of keeping stale values.
+_strip_arbiter_block() {
+  [ -f "$1" ] || return 0
+  grep -q "^# Arbiter (prefix:" "$1" || return 0
+  cp "$1" "$1.bak.$(date +%Y%m%d%H%M%S)"
+  sed -i.arbiter-tmp '/^# Arbiter (prefix:/,/credentials\.sh/d' "$1" && rm -f "$1.arbiter-tmp"
+}
+for _profile in "$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.bashrc" "$HOME/.profile"; do
+  _strip_arbiter_block "$_profile"
+done
+touch "$SHELL_PROFILE"
+printf '%s\n' "$ENV_BLOCK" >> "$SHELL_PROFILE"
+ok "Shell profile updated: $SHELL_PROFILE"
 
 # ── Vault Search Index ────────────────────────────────────────────────────────
 DO_RAG=false
