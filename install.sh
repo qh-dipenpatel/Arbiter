@@ -210,7 +210,7 @@ echo "    Advanced — manually set folder paths, code reference dir, and repo c
 echo ""
 _mode_input=""
 read -rp "  Advanced setup? [y/N]: " _mode_input
-if [[ "${_mode_input,,}" == "y" || "${_mode_input,,}" == "yes" ]]; then
+if [[ "$_mode_input" == [yY] || "$_mode_input" == [yY][eE][sS] ]]; then
   SIMPLE_MODE=false
 else
   SIMPLE_MODE=true
