@@ -38,6 +38,8 @@ Controls that must prevent exposure belong in PreToolUse. PostToolUse is a secon
 - `pre-tool-bash-gate-pr-create.py` fails open on internal errors, except that a command it cannot parse falls back to a text match.
 - `pre-tool-write-require-read.py` and `post-tool-read-record.py` fail open: a logging or parsing problem never blocks work.
 
+**What fail closed covers.** The two PHI pre hooks deny when they catch an error themselves: bad or wrongly shaped input, a missing or broken `phi_patterns.py`, or any exception inside the scan. Claude Code treats a hook that cannot start, exits with a code other than 0 or 2, prints invalid output, or is cancelled by its timeout as a non blocking error, and the action goes ahead (source: Claude Code hooks documentation, checked 2026-11-02). So a hook file with a syntax error, or a missing `python3`, does not block. Timeouts: the documented default for a command hook is 600 seconds, and `settings.json` sets none on these hooks. Measured scan times are in "PHI scan speed limits" below.
+
 ---
 
 ## Hook event map
@@ -154,7 +156,7 @@ flowchart TD
 
 **Event:** PreToolUse — fires before Write, Edit, MultiEdit, and NotebookEdit.
 
-Scans the content being written to disk for PHI patterns and for PHI columns in CSV or JSON row dumps. The write is blocked before it reaches disk if a match is found. Fails closed.
+Scans the content being written to disk (`content`, `new_string`, each MultiEdit `new_string`, `new_source`) with `scan_levels`: the labeled identifier rules, the context rules, and PHI columns in CSV or JSON row dumps. The target path is not scanned. The strongest finding sets the outcome: deny blocks the write, ask makes Claude Code prompt you, warn lets the write follow the normal permission flow and adds a visible message. The message names rules and levels, never the matched text. Fails closed on errors it catches.
 
 ```mermaid
 flowchart TD
@@ -180,7 +182,7 @@ flowchart TD
   class E problem
 ```
 
-**Patterns covered:** MRN, SSN, DOB, patient ID, NPI, insurance ID.
+**Rules covered:** see "PHI detection levels and rules" below.
 
 ---
 
@@ -255,7 +257,7 @@ flowchart TD
 
 Scans every tool result for PHI before Claude reads it. Covers Bash (Databricks CLI, git), Read (files), and all MCP tools (Jira, Notion, Slack, Databricks, any future connection). Write, Edit, MultiEdit, and TodoWrite are skipped because they return operational status, not external data.
 
-**PostToolUse hooks cannot suppress results.** When PHI is detected, the hook injects an `additionalContext` warning instructing Claude not to process, store, log, or forward the data. The raw result still reaches Claude.
+**PostToolUse hooks cannot suppress results.** When PHI is detected, the hook injects an `additionalContext` warning that lists each finding with its level, for example `PHONE (ask)`. If the strongest finding is deny or ask, the note starts with "PHI DETECTED" and tells Claude not to process, store, log, or forward the data. If every finding is warn, the note says "Weak PHI signal", says it may be a false alarm, and asks Claude to check whether the data identifies a person before storing or forwarding it. The raw result still reaches Claude.
 
 > **Limitation:** PHI in tool results reaches Claude's context. The hook instructs Claude to halt processing, but does not technically prevent the data from being seen.
 
@@ -289,7 +291,7 @@ flowchart TD
 
 **Skip list:** Write, Edit, MultiEdit, TodoWrite.
 
-**Patterns covered:** MRN, SSN, DOB, patient ID, NPI, insurance ID.
+**Rules covered:** the same rules as the write hook, applied to tool results by `scan_levels`. See "PHI detection levels and rules" below.
 
 **Why this is the critical gate:** MCP tools are the primary channel through which production data enters Claude's context. A Databricks query, a Jira issue, or a Notion page can all return PHI. This hook intercepts at the seam between external systems and Claude's context window, which is the last point before data enters the Anthropic API request body.
 
@@ -297,14 +299,16 @@ flowchart TD
 
 ## PHI scrubbing: what it covers and what it does not
 
-The PHI hooks use pattern matching on structured identifiers. They catch formatted data — an MRN written as `MRN: 1234567`, a date preceded by a DOB keyword. They do not read intent. They do not catch free-text clinical narrative.
+The PHI hooks use fixed text patterns. They catch labeled identifiers, dates next to birth words, full street addresses, names right after a patient label, and combinations of weak clues (see "PHI detection levels and rules" below). They do not read intent, and anything outside those shapes passes. The README lists what is not caught.
 
 ### What the hooks catch
 
-All four surfaces below are scanned before the data reaches Claude or Anthropic.
+The write and Bash hooks scan before the action runs. The result hook scans after the tool has run, so what it flags is already in Claude's context.
 
 | Surface | Hook | Example caught |
 |---|---|---|
+| Bash command text, including heredocs and inline data | `pre-tool-bash-scan-phi.py` | An echo that writes a patient label and a capitalized name into a file |
+| Script files named in a Bash command, read and never run | `pre-tool-bash-scan-phi.py` | `python3 run.py` where `run.py` holds a full street address |
 | File content being written to disk | `pre-tool-write-scan-phi.py` | Write call containing `MRN: 9876543` |
 | Bash command output | `post-tool-result-scan-phi.py` | Databricks CLI returning a row with `patient_id: 84729` |
 | File content being read | `post-tool-result-scan-phi.py` | Read call returning a CSV with `SSN: 123-45-6789` |
@@ -321,6 +325,20 @@ All four surfaces below are scanned before the data reaches Claude or Anthropic.
 | NPI | `NPI: 1234567890` |
 | Insurance or policy ID | `insurance_id: ABC123456`, `policy_number: XY-99001`, `subscriber_id: Z889900` |
 
+### PHI detection levels and rules
+
+`phi_patterns.scan_levels` returns findings, each with a level. The strongest level decides the outcome in the pre hooks.
+
+| Level | Pre hook outcome | Rules at this level (verified in `phi_patterns.py`) |
+|---|---|---|
+| deny | `permissionDecision: deny` | The labeled identifier rules above, a date next to a birth word (also with month names, "born on" and "birthday"), a full street address (number, street words, street suffix, city, two letter state, ZIP), a capitalized name right after a patient, member or pt label (`NAME`), PHI column names that come with data (`COLUMN:`). A label missing from the level map also defaults to deny. |
+| ask | `permissionDecision: ask` | A phone number next to a phone label (`PHONE`). Two clues of different kinds within 200 characters (`CONTEXT`). |
+| warn | No permission decision. A `systemMessage` and `additionalContext` are added and the normal permission flow runs. | A lone titled name (`Mr`, `Mrs`, `Ms`, `Mx` plus two capitalized words), a lone age with a sex word or `y/o`, or a lone date next to an admission, discharge, visit, surgery or procedure word (`CONTEXT_CLUE`). A phone number with separators and no label (`PHONE_UNLABELED`). |
+
+Clue kinds are name, age and sex, event date, street part, phone and clinical term. A clinical term comes from a short list of generic words, with no drug or disease names. A street part alone and a clinical term alone are never findings. Clues whose text overlaps never pair, so one word cannot count twice. Large text is scanned in 64 KB pieces that overlap by 1 KB.
+
+A pre hook message lists rule labels and levels only, never the matched text. `scan_for_phi` and `scan_structured` are the strict block rules. They keep their original outputs for the original labels and also gained the date of birth with a month name rule and the street address rule, so text that passed before can now be blocked. The vault inject hook withholds an excerpt that has a finding at any level.
+
 ### What the hooks do not catch
 
 **1. User-typed PHI in the chat prompt.**
@@ -336,20 +354,8 @@ What to do instead:
 ✅ "The TAVR encounter record is missing encounter_date. 14 of 500 records have this issue. Help me debug the null check."
 ```
 
-**2. Free-text clinical narrative.**
-The hooks scan for structured identifiers with recognizable labels. A patient name, a street address, or a clinical note written in plain prose will not trigger a block.
-
-What slips through:
-```
-❌ "John Smith, admitted March 15, lives at 123 Main Street" — no structured identifier, no block
-❌ "The patient presented with chest pain on 3/15" — date without a DOB/born keyword, no block
-```
-
-What gets caught:
-```
-✅ "DOB: 03/15/1982" — DOB keyword + date format → blocked
-✅ "MRN 1234567" — MRN label + digits → blocked
-```
+**2. Text with no clear clue.**
+Names, addresses, dates and clinical notes are caught only in the shapes listed under "PHI detection levels and rules". A name with no patient label or title next to it, an address missing its city, state or ZIP, a date with no birth or care word nearby, and a clinical note with no personal clue all pass. A lone weak clue gives a warn at most. The README has the full list of what is not caught.
 
 **3. PHI already in the conversation from an earlier turn.**
 If PHI entered Claude's context before a hook was active — for example, from a prompt you typed before the hook was installed — it remains in the conversation history that Anthropic receives on every subsequent turn. Hooks only gate new data as it enters; they do not scrub existing context.
@@ -407,11 +413,17 @@ flowchart TD
 
 **Event:** PreToolUse — fires before every Bash command.
 
-Denies commands whose text contains PHI, for example `echo "..." > file`, heredocs, or inline data. Uses the shared patterns in `phi_patterns.py`.
+Scans the command text, and the script files the command names, with `scan_levels`. Deny blocks the command, ask makes Claude Code prompt you, warn adds a visible message and lets the normal permission flow run. The message lists sources and rule labels only, for example `Bash command text` or `script file run.py`, never the matched text.
 
-**Fails closed.** If the hook cannot run (bad payload, missing `phi_patterns.py`, any exception) it denies the command and says why. Decision by the owner on 2026-11-01: an unscanned command is treated as unsafe. Cost: a broken hook blocks all Bash, so fixes happen in an editor outside Claude Code (see Recovery).
+**Script file scan.** The command is split with `shlex`. For `python`, `python3`, `bash`, `sh`, `zsh`, `node`, `source` or `.`, and a command that starts with a path, the named file is read and scanned with the same rules. Wrappers (`sudo`, `env`, `nohup`, `time`, `exec`, `command`) and leading `VAR=value` words are skipped. At most 10 files per command. The file is only read, never run. A file larger than 256 KB is read in 256 KB blocks that overlap by 1 KB, so a value on a block edge is still found. The scan is best effort and degrades to the command text alone, never blocking, when the file is missing, unreadable, a directory or pipe, binary (a null byte in the first 8 KB), a path the system rejects, or the command cannot be parsed. Inline code (`-c`, `-m`, `-e`, `-p`) and a script read from stdin name no file. A command longer than 32,768 characters is not parsed, so its script files are not read, but its text is still scanned in full.
 
-> **Known limit:** it scans the command text only. A script that generates or fetches PHI and writes it to a file at run time passes, because the PHI is not in the command text. `post-tool-result-scan-phi.py` still scans anything the script prints. A test named `test_known_limit_script_writing_phi_is_not_caught` documents this.
+**Fails closed.** If the hook cannot run (bad payload, a payload of the wrong shape, missing `phi_patterns.py`, any exception in the core scan) it denies the command and says why. Decision by the owner on 2026-11-01: an unscanned command is treated as unsafe. Cost: a broken hook blocks all Bash, so fixes happen in an editor outside Claude Code (see Recovery). This covers errors the hook catches; see "What fail closed covers" above for the cases Claude Code treats as non blocking.
+
+> **Known limits:** PHI that a script builds, fetches or writes at run time is not in the command text or the file, so it passes. Split or encoded strings (concatenation, base64) dodge the patterns. Scripts reached through variables, `cd`, `-m module`, `xargs` or pipes are not found. The file can change after the scan. `post-tool-result-scan-phi.py` still scans anything the script prints, but only after it is in Claude's context. Tests that pin these limits: `test_known_limit_script_writing_phi_is_not_caught`, `test_f06_split_value_in_script_passes`, `test_command_over_parse_cap_is_text_scanned_only`. If one of them starts failing, the limit moved and this page must change.
+
+### PHI scan speed limits
+
+Every repeat in the PHI patterns has an upper limit, because an open ended whitespace repeat on both sides of a separator once made the cost grow with the square of the run length (the old pattern took 2.9 seconds on 20,000 spaces after a label, measured). `tests/hooks/test_phi_safety_speed.py` holds the time budgets: 1 MB of clean text must scan in under 5 seconds, and 256 KB of adversarial text (long runs of whitespace, digits, label like words, packed near miss clues) in under 3 seconds each. On the development machine the worst cases measured about 2 seconds per MB, clean text about 0.5 seconds per MB, and a hook process adds about 35 milliseconds of start up. Run `PHI_TIMING_REPORT=1 python3 -m unittest discover -s tests/hooks -p 'test_phi_safety_speed.py'` to print the times on your machine.
 
 ## 8. pre-tool-bash-databricks-ask.py
 
