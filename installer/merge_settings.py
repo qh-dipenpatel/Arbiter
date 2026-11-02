@@ -6,6 +6,7 @@ Scope: merge Arbiter's settings.json template into ~/.claude/settings.json witho
        destroying the user's own settings
 Ticket: none (Arbiter is not Jira tracked)
 ChangeLog:
+  2026-11-02  Optional SKILL_PREFIX argument writes env.ARBITER_SKILL_PREFIX (gate hook).
   2026-09-23  Created. Replaces the sed overwrite in install.sh, which discarded every
               user key (hooks, permissions, env, model, plugins, statusLine).
 
@@ -16,13 +17,14 @@ Rules:
     removed, including stale paths from a moved repo, then the template groups are added.
     User hook groups are kept untouched.
   - permissions allow/ask/deny and additionalDirectories: union, order preserved.
-  - env: ARBITER_KNOWLEDGE, ARBITER_CODE_DIR, CLAUDE_DOTFILES set (GUI launched editors do
-    not load the shell profile). Other env keys kept.
+  - env: ARBITER_KNOWLEDGE, ARBITER_CODE_DIR, CLAUDE_DOTFILES set, plus ARBITER_SKILL_PREFIX
+    when a prefix is given (GUI launched editors do not load the shell profile). Other env
+    keys kept.
   - Any other key: user value wins; template adds keys the user does not have.
   - Unreadable existing file: backed up by the caller, merge starts from {} and says so.
   - Write is atomic (temp file + os.replace) and goes through symlinks to the real file.
 
-Usage: merge_settings.py TEMPLATE TARGET REPO_DIR VAULT_DIR SCRIPTS_DIR CODE_DIR
+Usage: merge_settings.py TEMPLATE TARGET REPO_DIR VAULT_DIR SCRIPTS_DIR CODE_DIR [SKILL_PREFIX]
 """
 
 from __future__ import annotations
@@ -34,6 +36,9 @@ import sys
 import tempfile
 
 LIST_PERMISSION_KEYS = ("allow", "ask", "deny", "additionalDirectories")
+MIN_ARGS = 7
+MAX_ARGS = 8
+SKILL_PREFIX_ENV = "ARBITER_SKILL_PREFIX"
 
 
 def substitute(node: object, values: dict[str, str]) -> object:
@@ -124,15 +129,18 @@ def write_atomic(target: str, data: dict) -> None:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 7:
+    if not MIN_ARGS <= len(argv) <= MAX_ARGS:
         print(__doc__.strip().splitlines()[-1], file=sys.stderr)
         return 2
-    template_path, target, repo_dir, vault_dir, scripts_dir, code_dir = argv[1:]
+    template_path, target, repo_dir, vault_dir, scripts_dir, code_dir = argv[1:MIN_ARGS]
+    skill_prefix = argv[MIN_ARGS] if len(argv) == MAX_ARGS else ""
     with open(template_path) as fh:
         template = json.load(fh)
     template = substitute(template, {
         "$CLAUDE_DOTFILES": repo_dir, "$ARBITER_KNOWLEDGE": vault_dir, "$ARBITER_SCRIPTS": scripts_dir})
     env = {"ARBITER_KNOWLEDGE": vault_dir, "ARBITER_CODE_DIR": code_dir, "CLAUDE_DOTFILES": repo_dir}
+    if skill_prefix:
+        env[SKILL_PREFIX_ENV] = skill_prefix
     write_atomic(target, merge(load_user(target), template, env))
     return 0
 

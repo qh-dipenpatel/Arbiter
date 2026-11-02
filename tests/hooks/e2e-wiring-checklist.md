@@ -112,6 +112,18 @@ Open VS Code in the Arbiter project directory. Open a Claude Code session.
 
 ---
 
+## TC-W08: UserPromptExpansion - chain skill gate (not yet verified live)
+
+**Prerequisite:** re-run the installer so `env.ARBITER_SKILL_PREFIX` is in `~/.claude/settings.json`; a ticket folder under `$ARBITER_KNOWLEDGE/02-tickets/` with no spec or design file.
+
+**Action:** type `/<prefix>-arch <TICKET-ID>`. Then add a valid `<TICKET-ID>-gate-override.md` line and type it again.
+
+**Pass:** the first run is blocked with a reason naming the failed rule, the files and the override file; the second runs and a line appears in `~/.arbiter/state/gate_check.log`.
+
+**Fail:** the skill starts without a block, or the block shows no reason.
+
+---
+
 ## Notes
 
 - Tier 1 (fixture and unit tests, seconds): `bash tests/hooks/run.sh`
