@@ -8,6 +8,8 @@ ChangeLog:
               pre-tool-write-scan-phi.py and post-tool-result-scan-phi.py.
               Extraction handles real Claude Code payload shapes (Bash stdout/stderr,
               Read file.content, MCP content arrays) plus a serialized fallback.
+  2026-11-02  Added Level, Finding and scan_levels (deny, ask, warn). Every existing
+              rule maps to deny, so scan_for_phi and scan_structured are unchanged.
 
 Not a hook. Imported by hooks via sys.path from the hooks directory.
 """
@@ -16,6 +18,8 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass
+from enum import Enum
 
 # Label/value pairs in free text. (?<![A-Za-z]) instead of \b so prefixes like
 # patient_mrn still match; [=:] and optional quotes cover key=value and JSON.
@@ -48,6 +52,32 @@ COMPILED: list[tuple[re.Pattern[str], str]] = [
     (re.compile(pat, re.IGNORECASE), label) for pat, label in PHI_PATTERNS
 ]
 
+
+
+class Level(str, Enum):
+    """How a finding is handled: deny blocks, ask prompts the user, warn only reports."""
+
+    DENY = "deny"
+    ASK = "ask"
+    WARN = "warn"
+
+
+# Lower number means stronger. Used to sort findings and pick the strongest one.
+LEVEL_RANK: dict[Level, int] = {Level.DENY: 0, Level.ASK: 1, Level.WARN: 2}
+
+# A label missing from this map is treated as DENY, so a new rule fails safe.
+LABEL_LEVELS: dict[str, Level] = {}
+DEFAULT_LEVEL = Level.DENY
+
+
+@dataclass(frozen=True)
+class Finding:
+    """One PHI finding: the rule label and the level it is handled at."""
+
+    label: str
+    level: Level
+
+
 TEXT_KEYS: tuple[str, ...] = ("stdout", "stderr", "output", "text", "result", "content")
 
 
@@ -59,6 +89,27 @@ def scan_for_phi(texts: list[str]) -> list[str]:
             if pattern.search(text):
                 found.add(label)
     return sorted(found)
+
+
+def _level_for(label: str) -> Level:
+    return LABEL_LEVELS.get(label, DEFAULT_LEVEL)
+
+
+def scan_levels(texts: list[str]) -> list[Finding]:
+    """
+    All findings with levels, strongest first, then by label. Covers the labeled
+    patterns and the structured column checks. Duplicate labels are reported once.
+    """
+    labels = set(scan_for_phi(texts)) | set(scan_structured(texts))
+    findings = [Finding(label, _level_for(label)) for label in labels]
+    return sorted(findings, key=lambda f: (LEVEL_RANK[f.level], f.label))
+
+
+def strongest_level(findings: list[Finding]) -> Level | None:
+    """The strongest level among the findings, or None when there are none."""
+    if not findings:
+        return None
+    return min((f.level for f in findings), key=lambda lv: LEVEL_RANK[lv])
 
 
 def phi_column(name: object) -> bool:
