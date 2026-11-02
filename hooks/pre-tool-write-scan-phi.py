@@ -2,8 +2,12 @@
 """
 Trigger: PreToolUse — Write|Edit|MultiEdit|NotebookEdit
 Scope: text content being written to disk by Write, Edit, MultiEdit, and NotebookEdit tools
-Action: scan content for PHI patterns (MRN, SSN, DOB, patient identifiers); block if found
-On block: prints JSON with hookEventName + permissionDecision:deny + permissionDecisionReason, then exit 0
+Action: scan content for PHI with scan_levels (MRN, SSN, DOB, address, phone, names, context clues)
+deny level: prints JSON with hookEventName + permissionDecision:deny + permissionDecisionReason, exit 0
+ask level: same shape with permissionDecision:ask, so Claude Code prompts the user
+warn level: the write goes through the normal permission flow; prints a systemMessage and
+additionalContext warning with no permissionDecision
+Messages carry rule labels only, never the matched text
 Fails closed: unreadable payload or any internal error denies the write (a broken PHI gate must not open)
 If filter: none — matcher already limits scope; PHI scan is fast
 """
@@ -54,15 +58,15 @@ def main() -> None:
     if not texts:
         sys.exit(0)
 
-    findings = scan_for_phi(texts) + scan_structured(texts)
-    if findings:
-        deny(f"PHI detected in write content: {', '.join(findings)}. Remove PHI before writing to disk.")
+    output = pre_tool_decision([("write content", scan_levels(texts))])
+    if output:
+        print(json.dumps(output))
     sys.exit(0)
 
 
 try:
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from phi_patterns import scan_for_phi, scan_structured  # noqa: E402
+    from phi_patterns import pre_tool_decision, scan_levels  # noqa: E402
     main()
 except SystemExit:
     raise

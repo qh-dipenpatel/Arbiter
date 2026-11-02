@@ -2,7 +2,7 @@
 """
 Trigger: PostToolUse — all tools (matcher: "")
 Scope: every tool result before Claude reads it — Bash, Read, all MCP (Jira, Notion, Databricks, git, etc.)
-Action: scan result text for PHI patterns; warn Claude via additionalContext if found
+Action: scan result text with scan_levels; warn Claude via additionalContext, showing each finding's level
 Note: PostToolUse cannot suppress results; additionalContext instructs Claude not to process or forward PHI
 Output must include hookSpecificOutput.hookEventName or Claude Code rejects it (verified 2.1.220)
 If filter: none — broad matcher is intentional; SKIP_TOOLS handles internal write tools
@@ -15,7 +15,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from phi_patterns import extract_response_texts, scan_for_phi, scan_structured  # noqa: E402
+from phi_patterns import Finding, extract_response_texts, level_summary, scan_levels  # noqa: E402
 
 HOOK_EVENT = "PostToolUse"
 
@@ -23,8 +23,8 @@ HOOK_EVENT = "PostToolUse"
 SKIP_TOOLS = {"Write", "Edit", "MultiEdit", "NotebookEdit", "TodoWrite"}
 
 
-def build_warning(tool_name: str, findings: list[str]) -> dict:
-    types_str = ", ".join(findings)
+def build_warning(tool_name: str, findings: list[Finding]) -> dict:
+    types_str = level_summary(findings)
     return {
         "hookSpecificOutput": {
             "hookEventName": HOOK_EVENT,
@@ -52,7 +52,7 @@ def main() -> None:
         sys.exit(0)
 
     texts = extract_response_texts(tool_response)
-    findings = scan_for_phi(texts) + scan_structured(texts)
+    findings = scan_levels(texts)
     if findings:
         print(json.dumps(build_warning(tool_name, findings)))
     sys.exit(0)

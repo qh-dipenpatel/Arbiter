@@ -19,6 +19,9 @@ ChangeLog:
               character window where two different clue types raise CONTEXT to ask, a
               lone clue warning as CONTEXT_CLUE, and chunked scanning with overlap.
               Seen only through scan_levels; scan_for_phi and scan_structured unchanged.
+  2026-11-02  Added pre_tool_decision and level_summary: one place that turns findings
+              into PreToolUse output (deny, ask, or a warn message with no decision).
+              Messages carry rule labels only, never the matched text.
 
 Not a hook. Imported by hooks via sys.path from the hooks directory.
 """
@@ -334,6 +337,43 @@ def strongest_level(findings: list[Finding]) -> Level | None:
     if not findings:
         return None
     return min((f.level for f in findings), key=lambda lv: LEVEL_RANK[lv])
+
+
+PRE_TOOL_EVENT = "PreToolUse"
+
+
+def level_summary(findings: list[Finding]) -> str:
+    """Rule labels with their level, for example 'PHONE (ask)'. Never the matched text."""
+    return ", ".join(f"{f.label} ({f.level.value})" for f in findings)
+
+
+def _sources_text(sources: list[tuple[str, list[Finding]]]) -> str:
+    return "; ".join(f"{name}: {level_summary(found)}" for name, found in sources if found)
+
+
+def pre_tool_decision(sources: list[tuple[str, list[Finding]]]) -> dict | None:
+    """
+    PreToolUse output for findings grouped by source name, or None when there are none.
+    deny blocks. ask makes Claude Code prompt the user. warn carries no permission
+    decision, so the normal permission flow still runs; it only adds a visible
+    systemMessage and context for Claude.
+    """
+    flat = [f for _, found in sources for f in found]
+    level = strongest_level(flat)
+    if level is None:
+        return None
+    text = _sources_text(sources)
+    if level is Level.WARN:
+        note = f"PHI signal (warn level) in {text}. The action was allowed. Check it before relying on it."
+        return {"systemMessage": note,
+                "hookSpecificOutput": {"hookEventName": PRE_TOOL_EVENT, "additionalContext": note}}
+    if level is Level.ASK:
+        reason = f"Possible PHI in {text}. Approve only if the content is synthetic or safe."
+    else:
+        reason = f"PHI detected in {text}. Remove patient identifiers before this runs."
+    return {"hookSpecificOutput": {"hookEventName": PRE_TOOL_EVENT,
+                                   "permissionDecision": level.value,
+                                   "permissionDecisionReason": reason}}
 
 
 def phi_column(name: object) -> bool:
