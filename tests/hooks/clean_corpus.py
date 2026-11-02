@@ -4,6 +4,7 @@ Date: 2026-11-02
 Scope: ordinary engineering text that must never be flagged as PHI
 Ticket: none (Arbiter is not Jira tracked)
 ChangeLog:
+  2026-11-02  Added heading, placeholder and engineering lines for the context rules.
   2026-11-02  Created. Covers the false positive guards for PHI detection: headings,
               class and column names without values, timestamps, ids, versions,
               street fragments, clinical word fragments and ordinary prose. Later
@@ -39,4 +40,8 @@ CLEAN_CORPUS: tuple[str, ...] = (
     "| table | rows |\n|---|---|\n| bronze_events | 1620 |",
     "feature/add-null-check merged into main",
     "export ARBITER_KNOWLEDGE=/path/to/vault",
+    "Patient: Summary of the load job",
+    "Ms Summary Table lists the output columns",
+    "page visit logged at 2026 and the stored procedure ran",
+    "Patient Registry Model and member Data layout",
 )

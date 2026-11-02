@@ -14,6 +14,11 @@ ChangeLog:
               address (ADDRESS, both deny) and phone numbers (PHONE ask when labeled,
               PHONE_UNLABELED warn). Phone rules live in LEVELED_PATTERNS and are seen
               only through scan_levels, so scan_for_phi never blocks on a phone number.
+  2026-11-02  Added context rules: name anchors (NAME deny), clue types (title name,
+              age and sex, event date, street part, phone, clinical term), a 200
+              character window where two different clue types raise CONTEXT to ask, a
+              lone clue warning as CONTEXT_CLUE, and chunked scanning with overlap.
+              Seen only through scan_levels; scan_for_phi and scan_structured unchanged.
 
 Not a hook. Imported by hooks via sys.path from the hooks directory.
 """
@@ -24,6 +29,7 @@ import json
 import re
 from dataclasses import dataclass
 from enum import Enum
+from typing import Iterator
 
 # Label/value pairs in free text. (?<![A-Za-z]) instead of \b so prefixes like
 # patient_mrn still match; [=:] and optional quotes cover key=value and JSON.
@@ -102,6 +108,9 @@ LABEL_LEVELS: dict[str, Level] = {
     "ADDRESS": Level.DENY,
     "PHONE": Level.ASK,
     "PHONE_UNLABELED": Level.WARN,
+    "NAME": Level.DENY,
+    "CONTEXT": Level.ASK,
+    "CONTEXT_CLUE": Level.WARN,
 }
 DEFAULT_LEVEL = Level.DENY
 
@@ -142,6 +151,169 @@ def scan_phone_labels(texts: list[str]) -> set[str]:
     return found
 
 
+# Context rules. A clue is weak on its own. Two clues of different kinds inside one
+# window raise the level. Every repeat below has an upper limit.
+CONTEXT_WINDOW = 200
+CHUNK_SIZE = 65536
+CHUNK_OVERLAP = 1024
+EVENT_GAP = 40
+
+KIND_NAME = "NAME"
+KIND_AGE_SEX = "AGE_SEX"
+KIND_EVENT_DATE = "EVENT_DATE"
+KIND_STREET = "STREET"
+KIND_PHONE = "PHONE"
+KIND_CLINICAL = "CLINICAL"
+# Kinds that warn when alone. A street part or clinical term alone is never a finding.
+WARN_ALONE_KINDS = frozenset({KIND_NAME, KIND_AGE_SEX, KIND_EVENT_DATE})
+
+# Generic clinical words only. No drug or disease names, by decision.
+CLINICAL_TERMS: tuple[str, ...] = (
+    "diagnosis", "diagnoses", "diagnosed", "presented with", "presents with",
+    "presenting with", "chief complaint", "complains of", "complained of", "admitted",
+    "admission", "discharged", "discharge summary", "history of", "past medical history",
+    "assessment", "medication", "medications", "prescribed", "prognosis", "symptom",
+    "symptoms", "treatment plan", "treated for", "treated with", "hospitalized",
+    "surgery", "surgical", "biopsy", "lab results", "vital signs", "vitals",
+    "blood pressure", "allergic to", "allergies", "dosage", "clinical notes",
+    "progress note", "inpatient", "outpatient",
+)
+# First words that mark a heading or placeholder, never a person.
+NAME_STOPWORDS = frozenset({
+    "summary", "data", "record", "records", "table", "registry", "model", "the", "a", "an",
+    "this", "that", "none", "null", "unknown", "name", "names", "number", "id", "info",
+    "information", "list", "type", "class", "object", "field", "value", "status", "report",
+    "overview", "details", "history", "notes", "note", "service", "team", "user", "users",
+    "group", "member", "members", "patient", "patients", "and", "of", "for", "in", "is",
+    "not", "tbd", "redacted",
+})
+
+_NAME_WORD = r"[A-Z][A-Za-z'\-]{1,19}"
+_NAME_VALUE = _NAME_WORD + r"(?:,?\s{1,3}" + _NAME_WORD + r"){1,2}"
+_NAME_LABEL = (r"(?i:(?<![A-Za-z])(?:patient|member|pt)(?:[\s_]{0,3}name)?)"
+               r"[\"']?\s{0,3}[:=]\s{0,5}[\"']?(?P<value>" + _NAME_VALUE + r")")
+_BARE_LABEL_VALUE = (r"(?i:(?<![A-Za-z])(?:patient|member|pt))[\"']?\s{0,3}:\s{0,5}[\"']?"
+                     r"(?P<value>" + _NAME_VALUE + r")")
+_TITLE_NAME = (r"(?i:(?<![A-Za-z])(?:Mr|Mrs|Ms|Mx)\b)\.?\s{1,3}(?P<value>" + _NAME_WORD
+               + r"\s{1,3}" + _NAME_WORD + r")")
+_AGE_NUM = r"(?<![\d.])\d{1,3}(?![\d.])"
+_SEX_WORD = r"(?:male|female|man|woman|boy|girl)\b"
+_AGE_SEX = (r"(?:" + _AGE_NUM + r"[\s\-]{1,3}(?:years?|yrs?)[\s\-]{1,3}old[\s,\-]{1,3}" + _SEX_WORD
+            + r"|" + _AGE_NUM + r"\s{0,2}(?:y/o|y\.o\.)(?:\s{1,3}" + _SEX_WORD + r")?)")
+_ANY_DATE = r"(?:" + _DATE + r"|" + _MONTH_DATE + r")"
+_EVENT_WORD = (r"(?<![A-Za-z0-9_])(?:admit(?:ted)?|admission|discharged?|seen|visit|surgery"
+               r"|procedure)(?![A-Za-z0-9_])")
+_GAP = r"[^\n]{0," + str(EVENT_GAP) + r"}?"
+_EVENT_DATE = (r"(?:" + _EVENT_WORD + _GAP + _ANY_DATE + r"|" + _ANY_DATE + _GAP + _EVENT_WORD + r")")
+_STREET_PART = (r"(?<!\w)\d{1,5}\s{1,3}(?:" + _WORD + r"\s{1,3}){1,4}(?P<suffix>" + _STREET_SUFFIX
+                + r")\b")
+_CLINICAL = (r"(?<![A-Za-z0-9_])(?:"
+             + "|".join(r"\s{1,3}".join(re.escape(w) for w in t.split()) for t in CLINICAL_TERMS)
+             + r")(?![A-Za-z0-9_])")
+
+NAME_RULES = [re.compile(_NAME_LABEL), re.compile(_BARE_LABEL_VALUE)]
+TITLE_NAME_RULE = re.compile(_TITLE_NAME)
+AGE_SEX_RULE = re.compile(_AGE_SEX, re.IGNORECASE)
+EVENT_DATE_RULE = re.compile(_EVENT_DATE, re.IGNORECASE)
+STREET_PART_RULE = re.compile(_STREET_PART, re.IGNORECASE)
+CLINICAL_RULE = re.compile(_CLINICAL, re.IGNORECASE)
+
+
+@dataclass(frozen=True)
+class Clue:
+    """One weak signal: its kind and where it sits in the scanned text."""
+
+    kind: str
+    start: int
+    end: int
+
+
+def _is_name(value: str) -> bool:
+    """True unless the first word is a heading or placeholder word."""
+    first = re.split(r"[\s,]", value, maxsplit=1)[0]
+    return first.lower() not in NAME_STOPWORDS
+
+
+def has_name_label(text: str) -> bool:
+    """A person name placed right after a patient style label."""
+    for rule in NAME_RULES:
+        if any(_is_name(m.group("value")) for m in rule.finditer(text)):
+            return True
+    return False
+
+
+def _clues_for(rule: re.Pattern[str], kind: str, text: str, offset: int) -> set[Clue]:
+    return {Clue(kind, offset + m.start(), offset + m.end()) for m in rule.finditer(text)}
+
+
+def _title_name_clues(text: str, offset: int) -> set[Clue]:
+    return {Clue(KIND_NAME, offset + m.start(), offset + m.end())
+            for m in TITLE_NAME_RULE.finditer(text) if _is_name(m.group("value"))}
+
+
+def _street_clues(text: str, offset: int) -> set[Clue]:
+    """Street parts only count when the suffix is capitalized, so plain prose is skipped."""
+    return {Clue(KIND_STREET, offset + m.start(), offset + m.end())
+            for m in STREET_PART_RULE.finditer(text) if m.group("suffix")[0].isupper()}
+
+
+def collect_clues(text: str, offset: int = 0) -> set[Clue]:
+    """All clues in one piece of text, positions shifted by offset."""
+    clues = _title_name_clues(text, offset) | _street_clues(text, offset)
+    clues |= _clues_for(AGE_SEX_RULE, KIND_AGE_SEX, text, offset)
+    clues |= _clues_for(EVENT_DATE_RULE, KIND_EVENT_DATE, text, offset)
+    clues |= _clues_for(CLINICAL_RULE, KIND_CLINICAL, text, offset)
+    clues |= _clues_for(LABELED_PHONE_RULE, KIND_PHONE, text, offset)
+    clues |= _clues_for(BARE_PHONE_RULE, KIND_PHONE, text, offset)
+    return clues
+
+
+def iter_chunks(text: str) -> Iterator[tuple[int, str]]:
+    """Yield (offset, piece) so no input is skipped. Pieces overlap by CHUNK_OVERLAP."""
+    step = CHUNK_SIZE - CHUNK_OVERLAP
+    for offset in range(0, max(len(text), 1), step):
+        yield offset, text[offset:offset + CHUNK_SIZE]
+        if offset + CHUNK_SIZE >= len(text):
+            return
+
+
+def paired_clues(clues: set[Clue]) -> set[Clue]:
+    """
+    Clues that sit with a clue of a different kind inside CONTEXT_WINDOW characters.
+    Clues whose text overlaps never pair, so one word cannot count twice.
+    """
+    ordered = sorted(clues, key=lambda c: (c.start, c.end, c.kind))
+    paired: set[Clue] = set()
+    for i, first in enumerate(ordered):
+        for second in ordered[i + 1:]:
+            if second.start - first.start > CONTEXT_WINDOW:
+                break
+            if first.kind != second.kind and second.start >= first.end:
+                paired.update((first, second))
+    return paired
+
+
+def scan_context(texts: list[str]) -> list[Finding]:
+    """
+    NAME (deny) for a name after a patient label. CONTEXT (ask) for two clue kinds in one
+    window. CONTEXT_CLUE (warn) for a lone name, age or event date clue. Large text is
+    scanned in overlapping chunks.
+    """
+    found: set[Finding] = set()
+    for text in texts:
+        clues: set[Clue] = set()
+        for offset, piece in iter_chunks(text):
+            if has_name_label(piece):
+                found.add(Finding("NAME", _level_for("NAME")))
+            clues |= collect_clues(piece, offset)
+        paired = paired_clues(clues)
+        if paired:
+            found.add(Finding("CONTEXT", _level_for("CONTEXT")))
+        if any(c.kind in WARN_ALONE_KINDS for c in clues - paired):
+            found.add(Finding("CONTEXT_CLUE", _level_for("CONTEXT_CLUE")))
+    return sorted(found, key=lambda f: (LEVEL_RANK[f.level], f.label))
+
+
 def _level_for(label: str) -> Level:
     return LABEL_LEVELS.get(label, DEFAULT_LEVEL)
 
@@ -152,7 +324,8 @@ def scan_levels(texts: list[str]) -> list[Finding]:
     patterns and the structured column checks. Duplicate labels are reported once.
     """
     labels = set(scan_for_phi(texts)) | set(scan_structured(texts)) | scan_phone_labels(texts)
-    findings = [Finding(label, _level_for(label)) for label in labels]
+    findings = {Finding(label, _level_for(label)) for label in labels}
+    findings.update(scan_context(texts))
     return sorted(findings, key=lambda f: (LEVEL_RANK[f.level], f.label))
 
 

@@ -4,6 +4,8 @@ Date: 2026-11-02
 Scope: builds obviously fake PHI shaped test values at test time, from parts
 Ticket: none (Arbiter is not Jira tracked)
 ChangeLog:
+  2026-11-02  Added builders for context rules: name labels, titled names, age and
+              sex phrases, event dates and clinical phrases, all joined from parts.
   2026-11-02  Created. Every value is joined from short parts when a function is
               called, so no PHI shaped literal sits in a source file (the PHI write
               hook would block it, correctly). All values are fake on purpose:
@@ -28,6 +30,7 @@ FAKE_PHONE_LINE = "01" + "00"
 FAKE_STREET_NUMBER = "1" + "00"
 FAKE_STREET = "Example" + " Test" + " Street"
 FAKE_CITY = "Fake" + "town"
+FAKE_TITLE = "M" + "r"
 
 
 def fake_label(*parts: str) -> str:
@@ -105,6 +108,42 @@ def fake_labeled_phone() -> str:
 
 def fake_dashed_phone() -> str:
     return "-".join((FAKE_PHONE_AREA, FAKE_PHONE_PREFIX, FAKE_PHONE_LINE))
+
+
+def fake_name_label() -> str:
+    return f"{fake_label('patient', ' ', 'name')}: {fake_name()}"
+
+
+def fake_last_first() -> str:
+    return f"{fake_label('p', 't')}: {FAKE_LAST_NAME}, {FAKE_FIRST_NAME}"
+
+
+def fake_titled_name() -> str:
+    return f"{FAKE_TITLE} {fake_name()}"
+
+
+def fake_clinical_phrase() -> str:
+    return "pre" + "sented with" + " a " + "fake" + " complaint"
+
+
+def fake_diagnosed_phrase() -> str:
+    return "was " + "diag" + "nosed with" + " a fake condition"
+
+
+def fake_age_sex_phrase() -> str:
+    return " ".join(("5" + "8", "year", "old", "ma" + "le"))
+
+
+def fake_age_yo_phrase() -> str:
+    return "9" + "3" + " y" + "/o"
+
+
+def fake_event_date() -> str:
+    return "adm" + "itted on " + fake_us_date()
+
+
+def fake_clinical_word() -> str:
+    return "medi" + "cation"
 
 
 # Each builder that yields a value the current detector flags, keyed by the label
