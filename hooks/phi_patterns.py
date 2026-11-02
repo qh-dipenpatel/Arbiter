@@ -39,8 +39,8 @@ from typing import Iterator
 # Whitespace on each side of the separator is capped. The old open ended \s* on both
 # sides of a whitespace capable class made a long run of spaces cost time quadratic in
 # the run length. A cap this size still covers any realistic gap between a label and its value.
-SEP_SPACE_MAX = 10
-LABEL_SUFFIX_MAX = 20
+SEP_SPACE_MAX = 200
+LABEL_SUFFIX_MAX = 100
 _SEP = (r'["\']?\s{0,' + str(SEP_SPACE_MAX) + r'}[:=#\s\-]\s{0,' + str(SEP_SPACE_MAX)
         + r'}["\']?')
 _DATE = r'(?:\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}|\d{4}-\d{2}-\d{2})'

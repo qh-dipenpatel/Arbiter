@@ -337,7 +337,7 @@ The write and Bash hooks scan before the action runs. The result hook scans afte
 
 Clue kinds are name, age and sex, event date, street part, phone and clinical term. A clinical term comes from a short list of generic words, with no drug or disease names. A street part alone and a clinical term alone are never findings. Clues whose text overlaps never pair, so one word cannot count twice. Large text is scanned in 64 KB pieces that overlap by 1 KB.
 
-A pre hook message lists rule labels and levels only, never the matched text. `scan_for_phi` and `scan_structured` keep their original outputs and are the strict block rules. The vault inject hook withholds an excerpt that has a finding at any level.
+A pre hook message lists rule labels and levels only, never the matched text. `scan_for_phi` and `scan_structured` are the strict block rules. They keep their original outputs for the original labels and also gained the date of birth with a month name rule and the street address rule, so text that passed before can now be blocked. The vault inject hook withholds an excerpt that has a finding at any level.
 
 ### What the hooks do not catch
 

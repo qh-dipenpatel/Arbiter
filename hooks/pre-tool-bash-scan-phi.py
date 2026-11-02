@@ -64,14 +64,37 @@ SHELL_INLINE = re.compile(r"-[A-Za-z]{0,%d}c[A-Za-z]{0,%d}" % (FLAG_LETTERS_MAX,
 OPERATOR = re.compile(r"[();<>|&]+")
 
 
-def split_segments(command: str) -> list[list[str]]:
-    """Split a command into word lists at operators. An unparseable command gives []."""
-    lexer = shlex.shlex(command.replace("\n", " ; "), posix=True, punctuation_chars=True)
+def _tokenize(text: str) -> list[str]:
+    """Shell style words and operators. Raises ValueError on an unbalanced quote."""
+    lexer = shlex.shlex(text, posix=True, punctuation_chars=True)
     lexer.whitespace_split = True
+    return list(lexer)
+
+
+def _tokens_with_line_fallback(command: str) -> list[str]:
+    """Tokens for the whole command, or line by line when one quote is unbalanced.
+
+    An apostrophe inside a heredoc body breaks whole command parsing. Parsing each line
+    keeps the script word on the command line, and a line that still fails is split on
+    whitespace, so a script file is still found.
+    """
     try:
-        tokens = list(lexer)
+        return _tokenize(command.replace("\n", " ; "))
     except ValueError:
-        return []
+        pass
+    tokens: list[str] = []
+    for line in command.splitlines():
+        try:
+            tokens.extend(_tokenize(line))
+        except ValueError:
+            tokens.extend(line.split())
+        tokens.append(";")
+    return tokens
+
+
+def split_segments(command: str) -> list[list[str]]:
+    """Split a command into word lists at operators."""
+    tokens = _tokens_with_line_fallback(command)
     segments: list[list[str]] = [[]]
     for token in tokens:
         if OPERATOR.fullmatch(token):
