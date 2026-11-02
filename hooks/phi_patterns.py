@@ -22,6 +22,15 @@ ChangeLog:
   2026-11-02  Added pre_tool_decision and level_summary: one place that turns findings
               into PreToolUse output (deny, ask, or a warn message with no decision).
               Messages carry rule labels only, never the matched text.
+  2026-11-02  Column findings report as COLUMN only; the column name is no longer in
+              the label. Inline regex bounds replaced with named constants (same patterns).
+
+  2026-11-02  Review fixes: text is normalized (zero width removed, lookalike letters
+              and punctuation folded) before matching; DOB covers D.O.B., dashed
+              labels and more date shapes; a phone label with a wide gap stays ask;
+              generic words in a name value give ask instead of deny; accented and
+              lowercase names; yo age phrase; Medical Record Number; event date on
+              the next line.
 
 Not a hook. Imported by hooks via sys.path from the hooks directory.
 """
@@ -30,6 +39,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from dataclasses import dataclass
 from enum import Enum
 from typing import Iterator
@@ -41,42 +51,118 @@ from typing import Iterator
 # the run length. A cap this size still covers any realistic gap between a label and its value.
 SEP_SPACE_MAX = 200
 LABEL_SUFFIX_MAX = 100
+# Bounds for the repeats in the patterns below. The number in each name is the upper bound
+# or the exact count. Lower bounds of 0 and 1 stay written in the pattern.
+DAY_DIGITS_MAX = 2
+YEAR_DIGITS_MIN = 2
+YEAR_DIGITS_MAX = 4
+FULL_YEAR_DIGITS = 4
+DATE_PART_DIGITS = 2
+COMPACT_DATE_DIGITS = 8
+SPACE_RUN_MAX = 3
+SPACE_OPT_MAX = 3
+SPACE_SHORT_MAX = 2
+VALUE_SPACE_MAX = 5
+WORD_MAX = 19
+ADDRESS_NUMBER_MAX = 5
+ADDRESS_WORDS_MAX = 4
+ADDRESS_EXTRA_WORDS_MAX = 3
+STATE_LETTERS = 2
+ZIP_DIGITS = 5
+ZIP_PLUS4_DIGITS = 4
+MRN_DIGITS_MIN = 5
+MRN_DIGITS_MAX = 10
+SSN_GAP_MAX = 25
+SSN_FIRST_DIGITS = 3
+SSN_MIDDLE_DIGITS = 2
+SSN_LAST_DIGITS = 4
+NPI_DIGITS = 10
+INSURANCE_ID_MIN = 6
+INSURANCE_ID_MAX = 20
+PHONE_AREA_TAIL_DIGITS = 2
+PHONE_EXCHANGE_DIGITS = 3
+PHONE_LINE_DIGITS = 4
+PHONE_SEP_RUN_MAX = 2
+HEADER_CELL_MAX = 63
+NAME_EXTRA_WORDS_MAX = 2
+AGE_DIGITS_MAX = 3
+
+
+def _repeat(low: int, high: int) -> str:
+    """Regex repeat suffix with both bounds, for example _repeat(1, 3) gives {1,3}."""
+    return "{" + str(low) + "," + str(high) + "}"
+
+
+def _exact(count: int) -> str:
+    """Regex repeat suffix for an exact count, for example _exact(4) gives {4}."""
+    return "{" + str(count) + "}"
+
+
 _SEP = (r'["\']?\s{0,' + str(SEP_SPACE_MAX) + r'}[:=#\s\-]\s{0,' + str(SEP_SPACE_MAX)
         + r'}["\']?')
-_DATE = r'(?:\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}|\d{4}-\d{2}-\d{2})'
+_DATE = (r'(?:\d' + _repeat(1, DAY_DIGITS_MAX) + r'[/\-]\d' + _repeat(1, DAY_DIGITS_MAX)
+         + r'[/\-]\d' + _repeat(YEAR_DIGITS_MIN, YEAR_DIGITS_MAX) + r'|\d' + _exact(FULL_YEAR_DIGITS)
+         + r'-\d' + _exact(DATE_PART_DIGITS) + r'-\d' + _exact(DATE_PART_DIGITS) + r')')
+# Wider date shapes, used only right after a birth label: year first with / or ., dotted
+# day first, and eight digits with no separator.
+_DOB_DATE = (r'(?:\d' + _repeat(1, DAY_DIGITS_MAX) + r'[/\-.]\d' + _repeat(1, DAY_DIGITS_MAX)
+             + r'[/\-.]\d' + _repeat(YEAR_DIGITS_MIN, YEAR_DIGITS_MAX) + r'|\d'
+             + _exact(FULL_YEAR_DIGITS) + r'[/\-.]\d' + _repeat(1, DAY_DIGITS_MAX)
+             + r'[/\-.]\d' + _repeat(1, DAY_DIGITS_MAX)
+             + r'|(?<!\d)\d' + _exact(COMPACT_DATE_DIGITS) + r'(?!\d))')
+_DOB_LABEL = (r'(?:D\.O\.B\.?|DOB|date[\s_\-]?of[\s_\-]?birth|birth[\s_\-]?date|birthday|born)')
 
 # Bounded building blocks for the strong rules. Every repeat has an upper limit so a
 # long run of letters, digits or spaces cannot make matching slow.
 _MONTH = (r'(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?'
           r'|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?')
-_MONTH_DATE = (r'(?:' + _MONTH + r'\s{1,3}\d{1,2}(?:st|nd|rd|th)?,?\s{1,3}\d{4}'
-               r'|\d{1,2}(?:st|nd|rd|th)?\s{1,3}(?:of\s{1,3})?' + _MONTH + r',?\s{1,3}\d{4})')
-_SEP_B = r'["\']?\s{0,3}[:=#\-]?\s{0,3}["\']?'
-_BIRTH_WORD = r'(?:DOB|date[\s_]?of[\s_]?birth|birth[\s_]?date|birthday|born)'
-_WORD = r'[A-Za-z0-9][A-Za-z0-9.\'\-]{0,19}'
+_MONTH_DATE = (r'(?:' + _MONTH + r'\s' + _repeat(1, SPACE_RUN_MAX) + r'\d' + _repeat(1, DAY_DIGITS_MAX)
+               + r'(?:st|nd|rd|th)?,?\s' + _repeat(1, SPACE_RUN_MAX) + r'\d' + _exact(FULL_YEAR_DIGITS)
+               + r'|\d' + _repeat(1, DAY_DIGITS_MAX) + r'(?:st|nd|rd|th)?\s' + _repeat(1, SPACE_RUN_MAX)
+               + r'(?:of\s' + _repeat(1, SPACE_RUN_MAX) + r')?' + _MONTH + r',?\s' + _repeat(1, SPACE_RUN_MAX)
+               + r'\d' + _exact(FULL_YEAR_DIGITS) + r')')
+_SEP_B = r'["\']?\s' + _repeat(0, SPACE_OPT_MAX) + r'[:=#\-]?\s' + _repeat(0, SPACE_OPT_MAX) + r'["\']?'
+_WORD = r'[A-Za-z0-9][A-Za-z0-9.\'\-]' + _repeat(0, WORD_MAX)
 _STREET_SUFFIX = r'(?:Street|St|Avenue|Ave|Road|Rd|Lane|Ln|Drive|Dr|Boulevard|Blvd|Court|Ct|Way)'
-_ADDRESS = (r'(?<!\w)\d{1,5}\s{1,3}(?:' + _WORD + r'\s{1,3}){1,4}' + _STREET_SUFFIX
-            + r'\b\.?,?\s{1,3}(?:' + _WORD + r',?\s{1,3}){0,3}?' + _WORD
-            + r',?\s{1,3}(?-i:[A-Z]{2})\s{1,3}\d{5}(?:-\d{4})?(?!\d)')
+_ADDRESS = (r'(?<!\w)\d' + _repeat(1, ADDRESS_NUMBER_MAX) + r'\s' + _repeat(1, SPACE_RUN_MAX)
+            + r'(?:' + _WORD + r'\s' + _repeat(1, SPACE_RUN_MAX) + r')' + _repeat(1, ADDRESS_WORDS_MAX)
+            + _STREET_SUFFIX
+            + r'\b\.?,?\s' + _repeat(1, SPACE_RUN_MAX) + r'(?:' + _WORD + r',?\s'
+            + _repeat(1, SPACE_RUN_MAX) + r')' + _repeat(0, ADDRESS_EXTRA_WORDS_MAX) + r'?' + _WORD
+            + r',?\s' + _repeat(1, SPACE_RUN_MAX) + r'(?-i:[A-Z]' + _exact(STATE_LETTERS) + r')\s'
+            + _repeat(1, SPACE_RUN_MAX) + r'\d' + _exact(ZIP_DIGITS) + r'(?:-\d'
+            + _exact(ZIP_PLUS4_DIGITS) + r')?(?!\d)')
+PHONE_GAP_MAX = 50
 _PHONE_LABEL = r'(?<![A-Za-z])(?:phone|telephone|tel|cell|mobile|fax)(?:[\s_]?(?:number|num|no))?'
-_PHONE_LABELED = r'(?:\+?1[-.\s]{1,2})?(?:\([2-9]\d{2}\)\s{0,2}|[2-9]\d{2}[-.\s])\d{3}[-.\s]\d{4}(?![\d\-])'
-_PHONE_BARE = r'(?<![\d\-.])(?:\([2-9]\d{2}\)\s{0,2}|[2-9]\d{2}[-.])\d{3}[-.]\d{4}(?![\d\-.])'
+_PHONE_SEP = r'["\']?(?:\s{0,' + str(PHONE_GAP_MAX) + r'}[:=#\-]\s{0,' + str(PHONE_GAP_MAX) + r'}|\s{1,' + str(PHONE_GAP_MAX) + r'})["\']?'
+_PHONE_LABELED = (r'(?:\+?1[-.\s]' + _repeat(1, PHONE_SEP_RUN_MAX) + r')?(?:\([2-9]\d'
+                  + _exact(PHONE_AREA_TAIL_DIGITS) + r'\)\s' + _repeat(0, SPACE_SHORT_MAX)
+                  + r'|[2-9]\d' + _exact(PHONE_AREA_TAIL_DIGITS) + r'[-.\s])\d'
+                  + _exact(PHONE_EXCHANGE_DIGITS) + r'[-.\s]\d' + _exact(PHONE_LINE_DIGITS) + r'(?![\d\-])')
+_PHONE_BARE = (r'(?<![\d\-.])(?:\([2-9]\d' + _exact(PHONE_AREA_TAIL_DIGITS) + r'\)\s'
+               + _repeat(0, SPACE_SHORT_MAX) + r'|[2-9]\d' + _exact(PHONE_AREA_TAIL_DIGITS)
+               + r'[-.])\d' + _exact(PHONE_EXCHANGE_DIGITS) + r'[-.]\d' + _exact(PHONE_LINE_DIGITS)
+               + r'(?![\d\-.])')
 
 PHI_PATTERNS: list[tuple[str, str]] = [
-    (r'(?<![A-Za-z])MRN\w{0,' + str(LABEL_SUFFIX_MAX) + r'}' + _SEP + r'\d{5,10}\b', 'MRN'),
-    (r'\b(?:SSN|social[\s_]security(?:[\s_]number)?)[,:\s][^.\n\d]{0,25}\d{3}[-\s]\d{2}[-\s]\d{4}\b', 'SSN'),
-    (r'(?<![A-Za-z])(?:DOB|date[\s_]?of[\s_]?birth|birth[\s_]?date|born)' + _SEP + _DATE, 'DOB'),
+    (r'(?<![A-Za-z])(?:MRN\w{0,' + str(LABEL_SUFFIX_MAX) + r'}|medical[\s_]record[\s_]?(?:number|num|no)\.?)'
+     + _SEP + r'\d' + _repeat(MRN_DIGITS_MIN, MRN_DIGITS_MAX) + r'\b', 'MRN'),
+    (r'\b(?:SSN|social[\s_]security(?:[\s_]number)?)[,:\s][^.\n\d]' + _repeat(0, SSN_GAP_MAX)
+     + r'\d' + _exact(SSN_FIRST_DIGITS) + r'[-\s]\d' + _exact(SSN_MIDDLE_DIGITS)
+     + r'[-\s]\d' + _exact(SSN_LAST_DIGITS) + r'\b', 'SSN'),
+    (r'(?<![A-Za-z])' + _DOB_LABEL + _SEP + _DOB_DATE, 'DOB'),
     (r'(?<![A-Za-z])(?:patient|member|pt)[\s_]?id' + _SEP + r'\d+\b', 'PATIENT_ID'),
-    (r'\bNPI' + _SEP + r'\d{10}\b', 'NPI'),
-    (r'\b(?:insurance[\s_]?id|policy[\s_]?number|subscriber[\s_]?id)' + _SEP + r'[A-Za-z0-9\-]{6,20}\b', 'INSURANCE_ID'),
-    (_BIRTH_WORD + r'(?:\s{1,3}(?:on|is))?' + _SEP_B + r'(?:' + _DATE + '|' + _MONTH_DATE + ')', 'DOB'),
+    (r'\bNPI' + _SEP + r'\d' + _exact(NPI_DIGITS) + r'\b', 'NPI'),
+    (r'\b(?:insurance[\s_]?id|policy[\s_]?number|subscriber[\s_]?id)' + _SEP + r'[A-Za-z0-9\-]'
+     + _repeat(INSURANCE_ID_MIN, INSURANCE_ID_MAX) + r'\b', 'INSURANCE_ID'),
+    (_DOB_LABEL + r'(?:\s' + _repeat(1, SPACE_RUN_MAX) + r'(?:on|is))?' + _SEP_B + r'(?:' + _DOB_DATE + '|' + _MONTH_DATE + ')', 'DOB'),
     (_ADDRESS, 'ADDRESS'),
 ]
 
 # Rules seen only by scan_levels. Their levels are below deny, so scan_for_phi (which
 # the hooks treat as block) must never report them.
 LEVELED_PATTERNS: list[tuple[str, str]] = [
-    (_PHONE_LABEL + _SEP_B + _PHONE_LABELED, 'PHONE'),
+    (_PHONE_LABEL + _PHONE_SEP + _PHONE_LABELED, 'PHONE'),
 ]
 
 # Column names are normalized (lowercase, no _ - space) then substring matched.
@@ -89,8 +175,10 @@ PHI_COLUMN_TOKENS: tuple[str, ...] = (
     "phone", "email", "streetaddress", "homeaddress", "address1", "address2",
 )
 MIN_HEADER_COLUMNS = 2
+# Two or more spaces in a row separate CLI table columns.
+CLI_COLUMN_MIN_SPACES = 2
 # A header cell must look like a column name; stops prose or log lines being read as headers.
-HEADER_CELL = re.compile(r"[A-Za-z_][A-Za-z0-9_ ]{0,63}")
+HEADER_CELL = re.compile(r"[A-Za-z_][A-Za-z0-9_ ]" + _repeat(0, HEADER_CELL_MAX))
 
 COMPILED: list[tuple[re.Pattern[str], str]] = [
     (re.compile(pat, re.IGNORECASE), label) for pat, label in PHI_PATTERNS
@@ -112,7 +200,9 @@ class Level(str, Enum):
 LEVEL_RANK: dict[Level, int] = {Level.DENY: 0, Level.ASK: 1, Level.WARN: 2}
 
 # A label missing from this map is treated as DENY, so a new rule fails safe.
+COLUMN_LABEL = "COLUMN"
 LABEL_LEVELS: dict[str, Level] = {
+    COLUMN_LABEL: Level.DENY,
     "DOB": Level.DENY,
     "ADDRESS": Level.DENY,
     "PHONE": Level.ASK,
@@ -135,10 +225,30 @@ class Finding:
 TEXT_KEYS: tuple[str, ...] = ("stdout", "stderr", "output", "text", "result", "content")
 
 
+ZERO_WIDTH = dict.fromkeys(map(ord, "\u200b\u200c\u200d\u200e\u200f\u2060\ufeff\u00ad"))
+# Letters and punctuation from other scripts that look like the ASCII ones the rules use.
+LOOKALIKES = str.maketrans({
+    "\u0410": "A", "\u0412": "B", "\u0415": "E", "\u041a": "K", "\u041c": "M",
+    "\u041d": "H", "\u041e": "O", "\u0420": "P", "\u0421": "C", "\u0422": "T",
+    "\u0430": "a", "\u0435": "e", "\u043e": "o", "\u0440": "p", "\u0441": "c",
+    "\u0445": "x", "\u0391": "A", "\u0392": "B", "\u039f": "O", "\u03bf": "o",
+    "\u2215": "/", "\u2044": "/", "\u2010": "-", "\u2011": "-", "\u2012": "-",
+    "\u2013": "-", "\u2014": "-", "\u2212": "-", "\u2024": ".",
+})
+
+
+def normalize_text(text: str) -> str:
+    """Drop zero width characters, fold compatibility forms (NFKC), map lookalikes."""
+    if text.isascii():
+        return text
+    folded = unicodedata.normalize("NFKC", text.translate(ZERO_WIDTH))
+    return folded.translate(LOOKALIKES)
+
+
 def scan_for_phi(texts: list[str]) -> list[str]:
     """Return sorted PHI type labels found in any of the given texts."""
     found: set[str] = set()
-    for text in texts:
+    for text in map(normalize_text, texts):
         for pattern, label in COMPILED:
             if pattern.search(text):
                 found.add(label)
@@ -151,7 +261,7 @@ def scan_phone_labels(texts: list[str]) -> set[str]:
     number with no label. A labeled number is blanked first so it is not counted twice.
     """
     found: set[str] = set()
-    for text in texts:
+    for text in map(normalize_text, texts):
         if LABELED_PHONE_RULE.search(text):
             found.add("PHONE")
         remainder = LABELED_PHONE_RULE.sub(" ", text)
@@ -197,30 +307,57 @@ NAME_STOPWORDS = frozenset({
     "not", "tbd", "redacted",
 })
 
-_NAME_WORD = r"[A-Z][A-Za-z'\-]{1,19}"
-_NAME_VALUE = _NAME_WORD + r"(?:,?\s{1,3}" + _NAME_WORD + r"){1,2}"
-_NAME_LABEL = (r"(?i:(?<![A-Za-z])(?:patient|member|pt)(?:[\s_]{0,3}name)?)"
-               r"[\"']?\s{0,3}[:=]\s{0,5}[\"']?(?P<value>" + _NAME_VALUE + r")")
-_BARE_LABEL_VALUE = (r"(?i:(?<![A-Za-z])(?:patient|member|pt))[\"']?\s{0,3}:\s{0,5}[\"']?"
-                     r"(?P<value>" + _NAME_VALUE + r")")
-_TITLE_NAME = (r"(?i:(?<![A-Za-z])(?:Mr|Mrs|Ms|Mx)\b)\.?\s{1,3}(?P<value>" + _NAME_WORD
-               + r"\s{1,3}" + _NAME_WORD + r")")
-_AGE_NUM = r"(?<![\d.])\d{1,3}(?![\d.])"
+# Words that show a value is a form, team or system name and not a person. A name value
+# holding one of these is handled at ask, not deny.
+NAME_ASK_WORDS = frozenset({
+    "form", "forms", "platform", "team", "teams", "intake", "portal", "system", "app",
+    "application", "page", "dashboard", "workflow", "queue", "process", "program",
+    "pipeline", "engineering", "support", "survey", "template", "review", "project",
+    "service", "services", "department", "committee", "board", "channel",
+})
+
+_LETTER_UP = "A-ZÀ-ÖØ-Þ"
+_LETTER_ANY = "A-Za-zÀ-ÖØ-öø-ÿ"
+_NAME_WORD = "[" + _LETTER_UP + "][" + _LETTER_ANY + "'\\-]" + _repeat(1, WORD_MAX)
+_LOOSE_WORD = "[" + _LETTER_ANY + "][" + _LETTER_ANY + "'\\-]" + _repeat(1, WORD_MAX)
+_NAME_VALUE = (_NAME_WORD + r"(?:,?\s" + _repeat(1, SPACE_RUN_MAX) + _NAME_WORD + r")"
+               + _repeat(1, NAME_EXTRA_WORDS_MAX))
+_NAME_LABEL = (r"(?i:(?<![A-Za-z])(?:patient|member|pt)(?:[\s_]" + _repeat(0, SPACE_OPT_MAX)
+               + r"name)?)" + r"[\"']?\s" + _repeat(0, SPACE_OPT_MAX) + r"[:=]\s"
+               + _repeat(0, VALUE_SPACE_MAX) + r"[\"']?(?P<value>" + _NAME_VALUE + r")")
+_LOOSE_NAME_LABEL = (r"(?i:(?<![A-Za-z])(?:patient|member|pt)[\s_]" + _repeat(0, SPACE_OPT_MAX)
+                     + r"name)" + r"[\"']?\s" + _repeat(0, SPACE_OPT_MAX) + r"[:=]\s"
+                     + _repeat(0, VALUE_SPACE_MAX) + r"[\"']?(?P<value>" + _LOOSE_WORD
+                     + r"(?:,?\s" + _repeat(1, SPACE_RUN_MAX) + _LOOSE_WORD + r")"
+                     + _repeat(1, NAME_EXTRA_WORDS_MAX) + r")")
+_BARE_LABEL_VALUE = (r"(?i:(?<![A-Za-z])(?:patient|member|pt))[\"']?\s" + _repeat(0, SPACE_OPT_MAX)
+                     + r":\s" + _repeat(0, VALUE_SPACE_MAX) + r"[\"']?"
+                     + r"(?P<value>" + _NAME_VALUE + r")")
+_TITLE_NAME = (r"(?i:(?<![A-Za-z])(?:Mr|Mrs|Ms|Mx)\b)\.?\s" + _repeat(1, SPACE_RUN_MAX)
+               + r"(?P<value>" + _NAME_WORD + r"\s" + _repeat(1, SPACE_RUN_MAX) + _NAME_WORD + r")")
+_AGE_NUM = r"(?<![\d.])\d" + _repeat(1, AGE_DIGITS_MAX) + r"(?![\d.])"
 _SEX_WORD = r"(?:male|female|man|woman|boy|girl)\b"
-_AGE_SEX = (r"(?:" + _AGE_NUM + r"[\s\-]{1,3}(?:years?|yrs?)[\s\-]{1,3}old[\s,\-]{1,3}" + _SEX_WORD
-            + r"|" + _AGE_NUM + r"\s{0,2}(?:y/o|y\.o\.)(?:\s{1,3}" + _SEX_WORD + r")?)")
+_AGE_SEX = (r"(?:" + _AGE_NUM + r"[\s\-]" + _repeat(1, SPACE_RUN_MAX) + r"(?:years?|yrs?)[\s\-]"
+            + _repeat(1, SPACE_RUN_MAX) + r"old[\s,\-]" + _repeat(1, SPACE_RUN_MAX) + _SEX_WORD
+            + r"|" + _AGE_NUM + r"\s" + _repeat(0, SPACE_SHORT_MAX) + r"yo\s" + _repeat(1, SPACE_RUN_MAX)
+            + _SEX_WORD + r"|" + _AGE_NUM + r"\s" + _repeat(0, SPACE_SHORT_MAX) + r"(?:y/o|y\.o\.)(?:\s"
+            + _repeat(1, SPACE_RUN_MAX) + _SEX_WORD + r")?)")
 _ANY_DATE = r"(?:" + _DATE + r"|" + _MONTH_DATE + r")"
 _EVENT_WORD = (r"(?<![A-Za-z0-9_])(?:admit(?:ted)?|admission|discharged?|seen|visit|surgery"
                r"|procedure)(?![A-Za-z0-9_])")
-_GAP = r"[^\n]{0," + str(EVENT_GAP) + r"}?"
+_GAP = (r"(?:[^\n]{0," + str(EVENT_GAP) + r"}?|[^\n]{0," + str(EVENT_GAP) + r"}\n[^\n]{0,"
+        + str(EVENT_GAP) + r"}?)")
 _EVENT_DATE = (r"(?:" + _EVENT_WORD + _GAP + _ANY_DATE + r"|" + _ANY_DATE + _GAP + _EVENT_WORD + r")")
-_STREET_PART = (r"(?<!\w)\d{1,5}\s{1,3}(?:" + _WORD + r"\s{1,3}){1,4}(?P<suffix>" + _STREET_SUFFIX
-                + r")\b")
+_STREET_PART = (r"(?<!\w)\d" + _repeat(1, ADDRESS_NUMBER_MAX) + r"\s" + _repeat(1, SPACE_RUN_MAX)
+                + r"(?:" + _WORD + r"\s" + _repeat(1, SPACE_RUN_MAX) + r")"
+                + _repeat(1, ADDRESS_WORDS_MAX) + r"(?P<suffix>" + _STREET_SUFFIX + r")\b")
 _CLINICAL = (r"(?<![A-Za-z0-9_])(?:"
-             + "|".join(r"\s{1,3}".join(re.escape(w) for w in t.split()) for t in CLINICAL_TERMS)
+             + "|".join((r"\s" + _repeat(1, SPACE_RUN_MAX)).join(re.escape(w) for w in t.split())
+                        for t in CLINICAL_TERMS)
              + r")(?![A-Za-z0-9_])")
 
 NAME_RULES = [re.compile(_NAME_LABEL), re.compile(_BARE_LABEL_VALUE)]
+LOOSE_NAME_RULE = re.compile(_LOOSE_NAME_LABEL)
 TITLE_NAME_RULE = re.compile(_TITLE_NAME)
 AGE_SEX_RULE = re.compile(_AGE_SEX, re.IGNORECASE)
 EVENT_DATE_RULE = re.compile(_EVENT_DATE, re.IGNORECASE)
@@ -243,12 +380,28 @@ def _is_name(value: str) -> bool:
     return first.lower() not in NAME_STOPWORDS
 
 
-def has_name_label(text: str) -> bool:
-    """A person name placed right after a patient style label."""
+def _value_level(value: str, strict: bool) -> Level | None:
+    """DENY for a clear name, ASK for a doubtful one, None for a heading or placeholder."""
+    if not _is_name(value):
+        return None
+    words = {w.lower() for w in re.split(r"[\s,]+", value)}
+    if strict and not words & NAME_ASK_WORDS:
+        return Level.DENY
+    return Level.ASK
+
+
+def name_label_level(text: str) -> Level | None:
+    """
+    Level for a person name placed right after a patient style label, or None.
+    Capitalized values deny unless a generic word (form, team) shows it is not a person.
+    Lowercase values after an explicit name label only ask.
+    """
+    levels: list[Level] = []
     for rule in NAME_RULES:
-        if any(_is_name(m.group("value")) for m in rule.finditer(text)):
-            return True
-    return False
+        levels += [_value_level(m.group("value"), True) for m in rule.finditer(text)]
+    levels += [_value_level(m.group("value"), False) for m in LOOSE_NAME_RULE.finditer(text)]
+    found = [lv for lv in levels if lv is not None]
+    return min(found, key=lambda lv: LEVEL_RANK[lv]) if found else None
 
 
 def _clues_for(rule: re.Pattern[str], kind: str, text: str, offset: int) -> set[Clue]:
@@ -324,11 +477,12 @@ def scan_context(texts: list[str]) -> list[Finding]:
     scanned in overlapping chunks.
     """
     found: set[Finding] = set()
-    for text in texts:
+    for text in map(normalize_text, texts):
         clues: set[Clue] = set()
         for offset, piece in iter_chunks(text):
-            if has_name_label(piece):
-                found.add(Finding("NAME", _level_for("NAME")))
+            name_level = name_label_level(piece)
+            if name_level is not None:
+                found.add(Finding("NAME", name_level))
             clues |= collect_clues(piece, offset)
         paired = paired_clues(clues)
         if paired:
@@ -342,12 +496,17 @@ def _level_for(label: str) -> Level:
     return LABEL_LEVELS.get(label, DEFAULT_LEVEL)
 
 
+def _structured_labels(texts: list[str]) -> set[str]:
+    """COLUMN when any PHI column is found. The column name itself never becomes a label."""
+    return {COLUMN_LABEL} if scan_structured(texts) else set()
+
+
 def scan_levels(texts: list[str]) -> list[Finding]:
     """
     All findings with levels, strongest first, then by label. Covers the labeled
     patterns and the structured column checks. Duplicate labels are reported once.
     """
-    labels = set(scan_for_phi(texts)) | set(scan_structured(texts)) | scan_phone_labels(texts)
+    labels = set(scan_for_phi(texts)) | _structured_labels(texts) | scan_phone_labels(texts)
     findings = {Finding(label, _level_for(label)) for label in labels}
     findings.update(scan_context(texts))
     return sorted(findings, key=lambda f: (LEVEL_RANK[f.level], f.label))
@@ -438,7 +597,7 @@ def _scan_json_node(node: object, found: set[str], depth: int = 0) -> None:
 
 def _split_row(line: str) -> list[str]:
     """Split a CLI table row on pipes, tabs, commas, or runs of 2+ spaces."""
-    cells = re.split(r'\s*\|\s*|\t|,|\s{2,}', line.strip().strip('|'))
+    cells = re.split(r'\s*\|\s*|\t|,|\s{' + str(CLI_COLUMN_MIN_SPACES) + r',}', line.strip().strip('|'))
     return [c.strip() for c in cells if c.strip()]
 
 

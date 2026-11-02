@@ -4,6 +4,8 @@ Date: 2026-11-02
 Scope: builds obviously fake PHI shaped test values at test time, from parts
 Ticket: none (Arbiter is not Jira tracked)
 ChangeLog:
+  2026-11-02  Added builders for review fixes: dotted birth label, date shapes, yo
+              phrase, accented name, wide phone gap, record number label.
   2026-11-02  Added builders for context rules: name labels, titled names, age and
               sex phrases, event dates and clinical phrases, all joined from parts.
   2026-11-02  Created. Every value is joined from short parts when a function is
@@ -144,6 +146,32 @@ def fake_event_date() -> str:
 
 def fake_clinical_word() -> str:
     return "medi" + "cation"
+
+
+def fake_dob_label_dotted() -> str:
+    return ".".join(("D", "O", "B", ""))
+
+
+def fake_date_parts(order: str, sep: str) -> str:
+    """A fake 1900 date. order is 'ymd', 'mdy' or 'mdy8' (no separator)."""
+    parts = {"y": FAKE_BIRTH_YEAR, "m": "01", "d": "02"}
+    return sep.join(parts[c] for c in order)
+
+
+def fake_yo_phrase() -> str:
+    return " ".join(("5" + "8", "y" + "o", "ma" + "le"))
+
+
+def fake_accented_name() -> str:
+    return "Jos" + "\u00e9" + " Garc" + "\u00ed" + "a"
+
+
+def fake_spaced_phone_label(gap: int) -> str:
+    return f"{fake_label('pho', 'ne')}:" + " " * gap + fake_phone()
+
+
+def fake_record_number_label() -> str:
+    return " ".join(("Medical", "Record", "Number")) + ": " + fake_mrn_value()
 
 
 # Each builder that yields a value the current detector flags, keyed by the label

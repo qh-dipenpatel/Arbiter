@@ -40,7 +40,7 @@ STEPS: dict[str, tuple[Step, str, str, str]] = {
     "S7 Databricks read denied w/ summary": (lambda t, i: t == "Bash" and "databricks fs cat" in i.get("command", ""),
                                              "PreToolUse:Bash", "Databricks data access needs approval", ""),
     "S8 PHI columns in CSV warned":  (lambda t, i: t == "Bash" and "fake_rows.csv" in i.get("command", ""),
-                                      "PostToolUse:Bash", "COLUMN:", ""),
+                                      "PostToolUse:Bash", "COLUMN (", ""),
 }
 
 

@@ -118,7 +118,7 @@ class LevelApi(unittest.TestCase):
 
     def test_column_finding_is_deny(self) -> None:
         text = json.dumps([{"first_name": fake_phi.FAKE_FIRST_NAME}])
-        self.assertEqual(scan_levels([text]), [Finding("COLUMN:first_name", Level.DENY)])
+        self.assertEqual(scan_levels([text]), [Finding("COLUMN", Level.DENY)])
 
     def test_levels_match_old_functions(self) -> None:
         text = f"{fake_phi.fake_mrn()}\n{fake_phi.fake_dob()}\n" + json.dumps([{"mrn": "x"}])

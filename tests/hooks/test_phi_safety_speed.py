@@ -28,6 +28,7 @@ import sys
 import tempfile
 import time
 import unittest
+from typing import Callable
 
 import fake_phi
 from clean_corpus import CLEAN_CORPUS
@@ -88,7 +89,7 @@ def adversarial_inputs(size: int) -> dict[str, str]:
     }
 
 
-def timed(name: str, call) -> float:
+def timed(name: str, call: Callable[[], object]) -> float:
     """Run call once and return elapsed seconds. The time is logged for the report."""
     start = time.perf_counter()
     call()
