@@ -1,10 +1,10 @@
 # /pull-notes — Gemini Meeting Notes Puller
 
-**Role:** Pull all new Gemini Notes emails from Gmail into local `$QH_MEETINGS/` storage and
+**Role:** Pull all new Gemini Notes emails from Gmail into local `${PREFIX_UPPER}_MEETINGS/` storage and
 update the pull catalog. Does NOT process notes into vault — use `/explore [meeting]` for that.
 
-**Local storage:** `$QH_MEETINGS/`
-**Catalog:** `$QH_MEETINGS/catalog.json`
+**Local storage:** `${PREFIX_UPPER}_MEETINGS/`
+**Catalog:** `${PREFIX_UPPER}_MEETINGS/catalog.json`
 
 ---
 
@@ -22,7 +22,7 @@ update the pull catalog. Does NOT process notes into vault — use `/explore [me
 
 Say:
 > "Pulling Gemini Notes for [N] message ID(s). I will read catalog.json, fetch each message
-> from Gmail by ID, download any new ones to $QH_MEETINGS/, and update the catalog."
+> from Gmail by ID, download any new ones to ${PREFIX_UPPER}_MEETINGS/, and update the catalog."
 
 No confirmation needed — this command makes no vault changes.
 
@@ -30,7 +30,7 @@ No confirmation needed — this command makes no vault changes.
 
 ## Step 1 — Bootstrap catalog
 
-Read `$QH_MEETINGS/catalog.json`.
+Read `${PREFIX_UPPER}_MEETINGS/catalog.json`.
 
 If the file does not exist, initialize it:
 ```json
@@ -94,7 +94,7 @@ Sanitize the raw meeting title for filesystem use:
 Folder name: `{email_date}_{sanitized_title}`
 Example: `2026-03-31_onboarding-data-platform-architecture-re`
 
-Full path: `$QH_MEETINGS/{YYYY}/{MM}/{folder_name}/`
+Full path: `${PREFIX_UPPER}_MEETINGS/{YYYY}/{MM}/{folder_name}/`
 
 Create the directory if it does not exist (Bash: `mkdir -p`).
 
@@ -175,7 +175,7 @@ Write neither file. Set `pull_error: "phi_detected"` in the catalog entry.
 
 ## Step 5 — Rewrite catalog
 
-Rewrite `$QH_MEETINGS/catalog.json`:
+Rewrite `${PREFIX_UPPER}_MEETINGS/catalog.json`:
 - `last_pull`: current timestamp (ISO 8601 with timezone offset)
 - All existing entries preserved
 - New entries appended

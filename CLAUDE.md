@@ -156,7 +156,7 @@ If it is unclear whether something is in scope, ask. Don't expand scope silently
 
 **Branch policy (mandatory):**
 1. All work starts from a feature branch created from `main`. Never work directly on `main`.
-2. Branch name convention: `{ticket-id}/{short-description}` (e.g. `CD-553/add-null-check`)
+2. Branch name convention: `{ticket-id}/{short-description}` (e.g. `DI-553/add-null-check`)
 3. Confirm the active branch with `git branch --show-current` before writing any file.
 4. When work is complete and `/{prefix}-qa` is APPROVED, the user opens a PR from the feature branch back to `main`. Claude does not push or open PRs directly.
 5. Push uses `--force-with-lease` only. Never `--force` alone.
@@ -296,20 +296,9 @@ Memory files are read at the start of each session. Don't repeat guidance alread
 
 ---
 
-## Coding Standards (apply to all generated code)
+## Coding Standards
 
-- Type hints on all function signatures, no exceptions
-- Functions 40 lines or fewer. Longer functions must be decomposed.
-- No magic numbers. All constants are named.
-- No `print()` for logging. Use the proper logging framework.
-- No commented-out code. If it's not needed, delete it.
-- No TODO in committed code. Capture it in Jira or the vault instead.
-- File headers on every new file (Author / Date / Scope / Ticket / ChangeLog)
-- No secrets in code. Credentials via environment variables or Azure Key Vault only.
-- Explicit over implicit: write modes, join types, null handling must always be stated.
-- Verify before using: any library method or API used must be confirmed to exist in the installed version before code is generated.
-
-Full Python/SQL/Databricks/Notebook detail: `$CLAUDE_DOTFILES/standards/coding-standards.md`.
+Before writing or changing code, read `$CLAUDE_DOTFILES/standards/coding-standards.md` (idioms and formatting) and `$CLAUDE_DOTFILES/standards/technical-standards.md` (numbered rules).
 
 ---
 

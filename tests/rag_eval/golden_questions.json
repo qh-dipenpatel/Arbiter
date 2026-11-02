@@ -1,0 +1,445 @@
+[
+  {
+    "id": "q01-null-date-decision",
+    "question": "What did we decide to do with records that have a missing encounter date?",
+    "expected": [
+      "03-knowledge-base/decisions/2026-01-10-null-encounter-date.md"
+    ],
+    "must_outrank": "00-landing/scratch-null-dates.md",
+    "critical": true
+  },
+  {
+    "id": "q02-retry-duplicates-fix",
+    "question": "How do we avoid duplicate rows when a job is retried?",
+    "expected": [
+      "03-knowledge-base/patterns/2026-03-01-idempotent-append.md",
+      "02-tickets/EX-101/EX-101-state.md"
+    ]
+  },
+  {
+    "id": "q03-retry-duplicates-cause",
+    "question": "Why did bronze get duplicate rows after the nightly retry?",
+    "expected": [
+      "02-tickets/EX-101/EX-101-state.md"
+    ]
+  },
+  {
+    "id": "q04-client-delivery",
+    "question": "When does the example client deliver files?",
+    "expected": [
+      "01-system-map/clients/example-client-a.md"
+    ]
+  },
+  {
+    "id": "q05-breaking-schema",
+    "question": "What happens when a schema change breaks existing clients?",
+    "expected": [
+      "03-knowledge-base/decisions/2026-02-03-schema-registry-versioning.md"
+    ]
+  },
+  {
+    "id": "q06-raw-to-bronze",
+    "question": "How do raw files get into the bronze tables?",
+    "expected": [
+      "01-system-map/pipelines/bronze-ingestion.md"
+    ]
+  },
+  {
+    "id": "q07-volume-meaning",
+    "question": "What is a volume in Unity Catalog?",
+    "expected": [
+      "03-knowledge-base/learnings/2026-03-12-unity-catalog-volumes.md"
+    ]
+  },
+  {
+    "id": "d01-reworded-absent-timestamp",
+    "question": "Which rule covers rows with an absent encounter timestamp?",
+    "expected": [
+      "03-knowledge-base/decisions/2026-01-10-null-encounter-date.md",
+      "03-knowledge-base/decisions/2026-06-18-null-encounter-date-revised.md"
+    ],
+    "must_outrank": "00-landing/scratch-null-dates.md"
+  },
+  {
+    "id": "d02-reworded-rerun-twice",
+    "question": "How do we make sure a rerun does not write the same records twice?",
+    "expected": [
+      "03-knowledge-base/patterns/2026-03-01-idempotent-append.md",
+      "03-knowledge-base/patterns/2026-08-04-retry-policy-revised.md",
+      "02-tickets/EX-101/EX-101-state.md"
+    ]
+  },
+  {
+    "id": "d03-reworded-stable-contract",
+    "question": "What gives a client's tables a stable contract when their columns change?",
+    "expected": [
+      "03-knowledge-base/decisions/2026-02-03-schema-registry-versioning.md",
+      "03-knowledge-base/decisions/2026-04-15-additive-schema-changes.md"
+    ]
+  },
+  {
+    "id": "d04-reworded-inbound-landing",
+    "question": "Where do inbound client files land before they become tables?",
+    "expected": [
+      "01-system-map/pipelines/bronze-ingestion.md"
+    ]
+  },
+  {
+    "id": "d05-reworded-governed-files",
+    "question": "Where can I keep files that tables can point to under governance?",
+    "expected": [
+      "03-knowledge-base/learnings/2026-03-12-unity-catalog-volumes.md"
+    ],
+    "holdout": true
+  },
+  {
+    "id": "d06-reworded-partner-time",
+    "question": "What time of day can we expect partner data?",
+    "expected": [
+      "01-system-map/clients/example-client-a.md",
+      "01-system-map/clients/example-client-a-delivery-update.md",
+      "01-system-map/clients/example-client-b.md",
+      "01-system-map/clients/example-client-c.md",
+      "01-system-map/clients/example-client-e.md"
+    ]
+  },
+  {
+    "id": "d07-reworded-inflated-counts",
+    "question": "Why did last night's rerun inflate our row counts?",
+    "expected": [
+      "02-tickets/EX-101/EX-101-state.md"
+    ]
+  },
+  {
+    "id": "d08-reworded-trustworthy-output",
+    "question": "How do we know pipeline output is trustworthy before downstream teams use it?",
+    "expected": [
+      "01-system-map/pipelines/end-product-qc-and-alerting.md"
+    ]
+  },
+  {
+    "id": "d09-near-dup-client-b-time",
+    "question": "When does client B deliver files?",
+    "expected": [
+      "01-system-map/clients/example-client-b.md"
+    ],
+    "must_outrank": "01-system-map/clients/example-client-a.md"
+  },
+  {
+    "id": "d10-near-dup-client-b-format",
+    "question": "What file format does client B send?",
+    "expected": [
+      "01-system-map/clients/example-client-b.md"
+    ],
+    "must_outrank": "01-system-map/clients/example-client-c.md",
+    "holdout": true
+  },
+  {
+    "id": "d11-near-dup-client-c-escalation",
+    "question": "Who handles escalations for client C?",
+    "expected": [
+      "01-system-map/clients/example-client-c.md"
+    ],
+    "must_outrank": "01-system-map/clients/example-client-b.md"
+  },
+  {
+    "id": "d12-near-dup-silver-duplicates",
+    "question": "Which ticket covers duplicate rows in silver, not bronze?",
+    "expected": [
+      "02-tickets/EX-117/EX-117-state.md"
+    ],
+    "must_outrank": "02-tickets/EX-101/EX-101-state.md"
+  },
+  {
+    "id": "d13-near-dup-bronze-retry-limit",
+    "question": "What is the retry limit for the bronze job?",
+    "expected": [
+      "01-system-map/pipelines/bronze-job-runbook.md"
+    ],
+    "must_outrank": "01-system-map/pipelines/silver-job-runbook.md"
+  },
+  {
+    "id": "d14-near-dup-late-not-empty",
+    "question": "Which alert fires for late files, not for empty files?",
+    "expected": [
+      "01-system-map/pipelines/late-file-alert.md",
+      "01-system-map/pipelines/2026-08-20-late-file-alert-threshold-revised.md"
+    ],
+    "must_outrank": "01-system-map/pipelines/empty-file-alert.md"
+  },
+  {
+    "id": "d15-near-dup-procedure-nulls",
+    "question": "How are nulls handled in procedure codes, not encounter dates?",
+    "expected": [
+      "03-knowledge-base/decisions/2026-04-08-null-procedure-code.md"
+    ],
+    "must_outrank": "03-knowledge-base/decisions/2026-01-10-null-encounter-date.md",
+    "holdout": true
+  },
+  {
+    "id": "d16-near-dup-additive-schema",
+    "question": "What was decided about additive schema changes?",
+    "expected": [
+      "03-knowledge-base/decisions/2026-04-15-additive-schema-changes.md"
+    ],
+    "must_outrank": "03-knowledge-base/decisions/2026-02-03-schema-registry-versioning.md"
+  },
+  {
+    "id": "d17-superseded-null-date-policy",
+    "question": "What is the current policy on missing encounter dates?",
+    "expected": [
+      "03-knowledge-base/decisions/2026-06-18-null-encounter-date-revised.md"
+    ],
+    "must_outrank": "03-knowledge-base/decisions/2026-01-10-null-encounter-date.md",
+    "critical": true
+  },
+  {
+    "id": "d18-superseded-client-a-cutoff",
+    "question": "What is client A's current delivery cutoff?",
+    "expected": [
+      "01-system-map/clients/example-client-a-delivery-update.md"
+    ],
+    "must_outrank": "01-system-map/clients/example-client-a.md",
+    "critical": true
+  },
+  {
+    "id": "d19-superseded-retry-policy",
+    "question": "What is the current retry policy?",
+    "expected": [
+      "03-knowledge-base/patterns/2026-08-04-retry-policy-revised.md"
+    ],
+    "must_outrank": "03-knowledge-base/patterns/2026-03-01-idempotent-append.md"
+  },
+  {
+    "id": "d20-superseded-bronze-naming",
+    "question": "Which naming convention applies to new bronze tables today?",
+    "expected": [
+      "03-knowledge-base/decisions/2026-07-02-bronze-table-naming-revised.md"
+    ],
+    "must_outrank": "03-knowledge-base/decisions/2026-02-20-bronze-table-naming.md"
+  },
+  {
+    "id": "d21-superseded-late-threshold",
+    "question": "What is the current alert threshold for late files?",
+    "expected": [
+      "01-system-map/pipelines/2026-08-20-late-file-alert-threshold-revised.md"
+    ],
+    "must_outrank": "01-system-map/pipelines/late-file-alert.md",
+    "holdout": true
+  },
+  {
+    "id": "d22-two-docs-duplicates-and-fix",
+    "question": "Why were there duplicates, and what is the standard fix?",
+    "expected": [
+      "02-tickets/EX-101/EX-101-state.md",
+      "03-knowledge-base/patterns/2026-03-01-idempotent-append.md"
+    ]
+  },
+  {
+    "id": "d23-two-docs-type-change-retry",
+    "question": "What breaks if a client changes a column type and the job retries?",
+    "expected": [
+      "03-knowledge-base/decisions/2026-02-03-schema-registry-versioning.md",
+      "03-knowledge-base/patterns/2026-03-01-idempotent-append.md",
+      "03-knowledge-base/patterns/2026-08-04-retry-policy-revised.md"
+    ]
+  },
+  {
+    "id": "d24-two-docs-client-a-delay",
+    "question": "What do we tell client A about the delay, and what caused it?",
+    "expected": [
+      "02-tickets/EX-109/EX-109-state.md",
+      "01-system-map/clients/example-client-a.md"
+    ]
+  },
+  {
+    "id": "d25-two-docs-volumes-and-bronze",
+    "question": "How do volumes relate to the raw to bronze flow?",
+    "expected": [
+      "03-knowledge-base/learnings/2026-03-12-unity-catalog-volumes.md",
+      "01-system-map/pipelines/bronze-ingestion.md"
+    ]
+  },
+  {
+    "id": "d26-two-docs-null-handling-bronze",
+    "question": "Which decisions affect null handling in the bronze load?",
+    "expected": [
+      "03-knowledge-base/decisions/2026-01-10-null-encounter-date.md",
+      "03-knowledge-base/decisions/2026-04-08-null-procedure-code.md",
+      "03-knowledge-base/decisions/2026-06-18-null-encounter-date-revised.md",
+      "01-system-map/pipelines/bronze-job-runbook.md"
+    ],
+    "holdout": true
+  },
+  {
+    "id": "d27-offtopic-pizza",
+    "question": "What is the best pizza topping?",
+    "expected": [],
+    "expect_none": true
+  },
+  {
+    "id": "d28-offtopic-laptop-password",
+    "question": "How do I reset my laptop password?",
+    "expected": [],
+    "expect_none": true
+  },
+  {
+    "id": "d29-offtopic-weather",
+    "question": "What is the weather forecast for Friday?",
+    "expected": [],
+    "expect_none": true
+  },
+  {
+    "id": "d30-offtopic-cricket",
+    "question": "Explain the rules of cricket.",
+    "expected": [],
+    "expect_none": true,
+    "holdout": true
+  },
+  {
+    "id": "d31-offtopic-interest-rates",
+    "question": "Summarize the latest news on interest rates.",
+    "expected": [],
+    "expect_none": true
+  },
+  {
+    "id": "d32-offtopic-capital",
+    "question": "What is the capital of Australia?",
+    "expected": [],
+    "expect_none": true
+  },
+  {
+    "id": "d33-absent-vacuum-retention",
+    "question": "What vacuum retention period do we use for Delta tables?",
+    "expected": [],
+    "expect_none": true
+  },
+  {
+    "id": "d34-absent-kafka-streaming",
+    "question": "How do we handle streaming ingestion from Kafka?",
+    "expected": [],
+    "expect_none": true
+  },
+  {
+    "id": "d35-absent-client-d",
+    "question": "What is client D's delivery schedule?",
+    "expected": [],
+    "expect_none": true,
+    "holdout": true
+  },
+  {
+    "id": "d36-absent-gold-partitioning",
+    "question": "What was decided about gold layer partitioning?",
+    "expected": [],
+    "expect_none": true
+  },
+  {
+    "id": "d37-absent-key-rotation",
+    "question": "How do we rotate the storage account keys?",
+    "expected": [],
+    "expect_none": true
+  },
+  {
+    "id": "d38-negation-weekly-clients",
+    "question": "Which clients deliver weekly rather than daily?",
+    "expected": [
+      "01-system-map/clients/example-client-c.md",
+      "01-system-map/clients/example-client-e.md"
+    ]
+  },
+  {
+    "id": "d39-negation-not-retry-ticket",
+    "question": "Which ticket was not caused by a retry?",
+    "expected": [
+      "02-tickets/EX-117/EX-117-state.md",
+      "02-tickets/EX-109/EX-109-state.md"
+    ],
+    "must_outrank": "02-tickets/EX-101/EX-101-state.md"
+  },
+  {
+    "id": "d40-negation-append-to-avoid",
+    "question": "Which append pattern should I not use?",
+    "expected": [
+      "03-knowledge-base/patterns/2026-03-20-anti-pattern-delete-then-insert.md",
+      "03-knowledge-base/patterns/2026-03-01-idempotent-append.md"
+    ],
+    "holdout": true
+  },
+  {
+    "id": "d41-terse-null-enc-date",
+    "question": "null enc date handling",
+    "expected": [
+      "03-knowledge-base/decisions/2026-01-10-null-encounter-date.md",
+      "03-knowledge-base/decisions/2026-06-18-null-encounter-date-revised.md"
+    ]
+  },
+  {
+    "id": "d42-terse-idempotent-typo",
+    "question": "idempotnt apend",
+    "expected": [
+      "03-knowledge-base/patterns/2026-03-01-idempotent-append.md"
+    ]
+  },
+  {
+    "id": "d43-terse-bronze-dups-retry",
+    "question": "bronze dups retry",
+    "expected": [
+      "02-tickets/EX-101/EX-101-state.md"
+    ]
+  },
+  {
+    "id": "d44-terse-uc-vol",
+    "question": "UC vol",
+    "expected": [
+      "03-knowledge-base/learnings/2026-03-12-unity-catalog-volumes.md"
+    ]
+  },
+  {
+    "id": "d45-terse-schema-typos",
+    "question": "schma regsitry breaking chg",
+    "expected": [
+      "03-knowledge-base/decisions/2026-02-03-schema-registry-versioning.md"
+    ],
+    "holdout": true
+  },
+  {
+    "id": "d46-noisy-january-empty-date",
+    "question": "I was on a call yesterday and someone mentioned how we handle it when the date field is empty in the incoming file, I think it was decided in January, what was it?",
+    "expected": [
+      "03-knowledge-base/decisions/2026-01-10-null-encounter-date.md"
+    ],
+    "must_outrank": "03-knowledge-base/decisions/2026-06-18-null-encounter-date-revised.md"
+  },
+  {
+    "id": "d47-noisy-lunch-duplicates",
+    "question": "Before lunch the team was talking about the nightly job failing halfway and then running again, and now we see the same rows twice in the bronze tables, what actually went wrong?",
+    "expected": [
+      "02-tickets/EX-101/EX-101-state.md"
+    ]
+  },
+  {
+    "id": "d48-noisy-client-a-mixed-with-b",
+    "question": "Client B asked about their cutoff and I mixed it up with client A, can you tell me when client A files are expected to arrive each day?",
+    "expected": [
+      "01-system-map/clients/example-client-a-delivery-update.md",
+      "01-system-map/clients/example-client-a.md"
+    ],
+    "must_outrank": "01-system-map/clients/example-client-b.md"
+  },
+  {
+    "id": "d49-noisy-laptop-volumes",
+    "question": "During the laptop refresh meeting someone asked what a volume is in our catalog and how it differs from a table",
+    "expected": [
+      "03-knowledge-base/learnings/2026-03-12-unity-catalog-volumes.md"
+    ]
+  },
+  {
+    "id": "d50-noisy-ticket-reference-schema",
+    "question": "EX-101 came up again but I actually need to know what we do when a client removes or renames a column",
+    "expected": [
+      "03-knowledge-base/decisions/2026-02-03-schema-registry-versioning.md"
+    ],
+    "must_outrank": "02-tickets/EX-101/EX-101-state.md",
+    "holdout": true
+  }
+]

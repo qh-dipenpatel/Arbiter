@@ -127,11 +127,11 @@ if [ -x "$GUARD" ]; then
 
     # TC-02: path under CODE_DIR → permissionDecision:deny
     run_test "tc-02 path under codedir" "$GUARD" "$FIXTURES_DIR/pre-tool-write-guard-path/tc-02-path-under-codedir.json" \
-        0 "permissionDecision" "" "ARBITER_CODE_DIR=/Users/user/Developer/qh-code"
+        0 "permissionDecision" "" "ARBITER_CODE_DIR=/Users/user/Developer/code"
 
     # TC-03: path outside CODE_DIR → exit 0, no output
     run_test "tc-03 path outside" "$GUARD" "$FIXTURES_DIR/pre-tool-write-guard-path/tc-03-path-outside.json" \
-        0 "" "permissionDecision" "ARBITER_CODE_DIR=/Users/user/Developer/qh-code"
+        0 "" "permissionDecision" "ARBITER_CODE_DIR=/Users/user/Developer/code"
 else
     echo "SKIP — $GUARD not found or not executable"
 fi
@@ -176,6 +176,14 @@ if [ -x "$COMPACT" ]; then
         0 "precompact_warning" ""
 else
     echo "SKIP — $COMPACT not found or not executable"
+fi
+
+echo ""
+echo "── hook inventory (hooks/, settings.json, docs/hooks.md) ───────"
+if python3 "$(dirname "$0")/check_hook_inventory.py"; then
+    PASS=$((PASS + 1))
+else
+    FAIL=$((FAIL + 1))
 fi
 
 echo ""

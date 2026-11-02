@@ -2,7 +2,7 @@
 
 **Role:** Two modes. Client mode gives current state with narrative prep for stakeholder questions. Ticket mode gives a scannable in-call reference — designed to stay open during a conversation.
 
-**Vault:** `$QH_KNOWLEDGE/`
+**Vault:** `${PREFIX_UPPER}_KNOWLEDGE/`
 
 ---
 
@@ -113,4 +113,4 @@ Rules:
 - Blocker must name who owns the resolution
 - Open section only if there is an unresolved question that could surface mid-conversation — omit if nothing is open
 - No narrative, no translation, no pushback prep
-- If no state file exists for the ticket, say so and offer to run `/qh-ticket [TICKET]` to build it
+- If no state file exists for the ticket, say so and offer to run `/{prefix}-ticket [TICKET]` to build it

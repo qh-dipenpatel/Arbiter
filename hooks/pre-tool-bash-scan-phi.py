@@ -6,11 +6,17 @@ Scope: block Bash commands whose text contains PHI (echo > file, heredocs, inlin
 Ticket: none (Arbiter is not Jira tracked)
 ChangeLog:
   2026-09-23  Created.
+  2026-11-01  Fails CLOSED on internal error (owner decision). Known limit documented.
 
 Trigger: PreToolUse — Bash
 Action: scan tool_input.command with the shared PHI patterns; deny if found
-Fails OPEN on internal error, unlike the write hook: Bash is the recovery path when the
-write hook itself is broken, and post-tool-result-scan-phi.py still scans the output.
+Fails CLOSED: any internal error (bad JSON, import error, scan error) denies the command
+with a clear message, same as the write hook.
+Known limit: only the command text is scanned. PHI that a script generates or writes to a
+file at run time is not in the command text and is not caught here;
+post-tool-result-scan-phi.py scans what the command prints.
+Recovery when this hook is broken: fix the file in an editor outside Claude Code (see
+docs/hooks.md, Recovery if a hook breaks).
 """
 
 from __future__ import annotations
@@ -42,8 +48,19 @@ def main() -> None:
         }}))
 
 
+def deny(reason: str) -> None:
+    print(json.dumps({"hookSpecificOutput": {
+        "hookEventName": HOOK_EVENT,
+        "permissionDecision": "deny",
+        "permissionDecisionReason": reason,
+    }}))
+
+
 try:
     main()
 except Exception as exc:
-    print(f"pre-tool-bash-scan-phi: internal error ({type(exc).__name__}); command allowed", file=sys.stderr)
+    deny(
+        f"pre-tool-bash-scan-phi: internal error ({type(exc).__name__}); command blocked "
+        "because the PHI scan could not run. Fix the hook, then retry."
+    )
 sys.exit(0)

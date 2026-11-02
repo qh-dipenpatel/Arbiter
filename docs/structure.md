@@ -30,8 +30,8 @@ The prefix (`dp` in the example) is set once at install. It drives folder names,
 prefix dp  →  dp-dotfiles/   dp-knowledge/   dp-scripts/
              $DP_KNOWLEDGE   $DP_SCRIPTS     /dp-ticket   /dp-spec  ...
 
-prefix qh  →  qh-dotfiles/   qh-knowledge/   qh-scripts/
-             $QH_KNOWLEDGE   $QH_SCRIPTS     /qh-ticket   /qh-spec  ...
+prefix ab  →  ab-dotfiles/   ab-knowledge/   ab-scripts/
+             $AB_KNOWLEDGE   $AB_SCRIPTS     /ab-ticket   /ab-spec  ...
 ```
 
 Claude Code runtime:
@@ -76,7 +76,7 @@ claude-dotfiles/
 │
 ├── settings.json                 ← Claude Code tool permissions template
 │                                    copied to ~/.claude/settings.json at install
-│                                    with QH_ env var names substituted for your prefix
+│                                    with {PREFIX_UPPER}_ env var names substituted for your prefix
 │
 │                                    never commit this file — it is in .gitignore
 │
@@ -189,12 +189,12 @@ claude-dotfiles/
 │                                    sourced by your shell profile and MCP server commands
 │
 ├── settings.json                 ← copied from repo template with env vars substituted
-│                                    (prefix substituted at install, e.g. QH_ → DP_)
+│                                    (prefix substituted at install, e.g. {PREFIX_UPPER}_ → DP_)
 │
 │                                    never commit this file
 │
 ├── commands/                     ← your installed skills (copied + substituted at install)
-│   ├── {prefix}-ticket.md        ← e.g. qh-ticket.md if your prefix is "qh"
+│   ├── {prefix}-ticket.md        ← e.g. ab-ticket.md if your prefix is "ab"
 │   ├── {prefix}-support.md
 │   ├── {prefix}-spec.md
 │   ├── {prefix}-arch.md
@@ -238,7 +238,7 @@ claude-dotfiles/
 > Your Obsidian knowledge base. Local only, not git tracked. Skills read from and write to this every session.
 >
 > Two env vars point to the same vault path after install:
-> - `${PREFIX}_KNOWLEDGE`: prefixed var used by skills (e.g. `$QH_KNOWLEDGE`, `$DP_KNOWLEDGE`)
+> - `${PREFIX}_KNOWLEDGE`: prefixed var used by skills (e.g. `$AB_KNOWLEDGE`, `$DP_KNOWLEDGE`)
 > - `ARBITER_KNOWLEDGE`: fixed name used by hooks and the RAG pipeline regardless of prefix
 >
 > The vault search index lives at `$ARBITER_KNOWLEDGE/.rag_index` (not git tracked).
@@ -259,13 +259,13 @@ dp-knowledge/
 │   └── platform-learning/        ← platform concepts added by /learn and /explore
 │
 ├── 02-tickets/                   ← one folder per ticket
-│   └── CD-200/
-│       ├── CD-200-state.md            ← live state, every skill reads and updates this
-│       ├── CD-200-support-handoff.md  ← written by /{prefix}-support
-│       ├── CD-200-spec.md             ← written by /{prefix}-spec
-│       ├── CD-200-design.md           ← written by /{prefix}-arch
-│       ├── CD-200-qa-findings.md      ← written by /{prefix}-qa
-│       └── CD-200-session-YYYY-MM-DD.md  ← written by /close
+│   └── DI-200/
+│       ├── DI-200-state.md            ← live state, every skill reads and updates this
+│       ├── DI-200-support-handoff.md  ← written by /{prefix}-support
+│       ├── DI-200-spec.md             ← written by /{prefix}-spec
+│       ├── DI-200-design.md           ← written by /{prefix}-arch
+│       ├── DI-200-qa-findings.md      ← written by /{prefix}-qa
+│       └── DI-200-session-YYYY-MM-DD.md  ← written by /close
 │
 ├── 03-knowledge-base/            ← durable knowledge that outlives any ticket
 │   ├── decisions/                ← YYYY-MM-DD-topic.md
@@ -291,7 +291,7 @@ dp-knowledge/
 
 > Where Claude saves scripts it generates for recurring tasks. Reused instead of regenerated.
 >
-> Env var derives from prefix: `qh` gives `$QH_SCRIPTS`, `dp` gives `$DP_SCRIPTS`.
+> Env var derives from prefix: `ab` gives `$AB_SCRIPTS`, `dp` gives `$DP_SCRIPTS`.
 
 ```
 your-scripts/                     ← path set by ${PREFIX}_SCRIPTS
@@ -310,7 +310,7 @@ Scripts here follow the same coding standards as all generated code (type hints,
 The file at `02-tickets/{KEY}/{KEY}-state.md` is the handoff contract between skills. Every skill reads it at Step 0 and updates it when done. A real one:
 
 ```markdown
-## CD-200 State
+## DI-200 State
 
 Status: SUPPORT_COMPLETE
 Next skill: /{prefix}-spec
@@ -320,7 +320,7 @@ Source: Data Platform approved 2026-06-02
 
 KNOWN
   - 22 records have null encounter_date in raw_tavr
-  - Root cause: Bronze filter added in CD-157 excludes null records
+  - Root cause: Bronze filter added in DI-157 excludes null records
   - Raw count: 500, Bronze count: 478, Silver count: 478
 
 UNKNOWN

@@ -93,7 +93,7 @@ Full setup details: [docs/setup.md](docs/setup.md)
 
 Most tickets follow one of these patterns. `{prefix}` is the skill prefix you set during install.
 
-> The prefix drives all slash command names, folder names, and env vars. If you chose prefix `dp` during install, `/dp-ticket` is your intake command. If you chose `qh`, it is `/qh-ticket`. The six ticket-chain skills get this prefix. Session skills (`/start`, `/close`, `/draft`, etc.) do not.
+> The prefix drives all slash command names, folder names, and env vars. If you chose prefix `dp` during install, `/dp-ticket` is your intake command. If you chose `ab`, it is `/ab-ticket`. The six ticket-chain skills get this prefix. Session skills (`/start`, `/close`, `/draft`, etc.) do not.
 
 **Coordination (investigation, decision, status update):**
 ```

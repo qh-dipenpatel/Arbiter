@@ -15,7 +15,7 @@ Source of truth lives in `claude-dotfiles/cursor-rules/` — do not edit the dep
 
 - **User:** [YOUR NAME], [YOUR TITLE], [YOUR COMPANY]
 - **Domain:** Health AI. PHI/PII rules apply at all times, no exceptions.
-- **Vault:** `$QH_KNOWLEDGE` — Obsidian vault, local only, not git tracked
+- **Vault:** `${PREFIX_UPPER}_KNOWLEDGE` — Obsidian vault, local only, not git tracked
 
 ---
 
@@ -64,7 +64,7 @@ Skip for purely mechanical steps with no real alternatives.
 ## Vault Structure
 
 ```
-QH_KNOWLEDGE/
+{PREFIX_UPPER}_KNOWLEDGE/
 ├── 00-landing/               <- rough notes, session captures
 ├── 01-system-map/
 │   ├── clients/              <- CLIENT-NAME.md (one file per client)
@@ -80,7 +80,7 @@ QH_KNOWLEDGE/
 │   └── patterns/             <- YYYY-MM-DD-topic.md
 ├── 04-education/             <- reference material, course notes
 ├── 05-claude-conversations/  <- exported conversation logs
-├── 06-meetings-summaries/    <- meeting transcripts ($QH_MEETINGS points here)
+├── 06-meetings-summaries/    <- meeting transcripts (${PREFIX_UPPER}_MEETINGS points here)
 ├── 07-workflows/             <- process docs, runbooks, SOPs
 └── memory/                   <- Claude feedback memories
 ```

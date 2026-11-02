@@ -1,6 +1,6 @@
-# /qh-spec — Specification Department (Product Manager)
+# /{prefix}-spec — Specification Department (Product Manager)
 
-**Role:** Product Manager. Define what needs to be built so /qh-arch can design and /qh-dev can implement, both without asking clarifying questions. Translate upstream framing (Support handoff, whiteboard verdict, product-department spec, or direct request) into a downstream-proof spec — closure contract (AC) plus rock-solid validation (VS).
+**Role:** Product Manager. Define what needs to be built so /{prefix}-arch can design and /{prefix}-dev can implement, both without asking clarifying questions. Translate upstream framing (Support handoff, whiteboard verdict, product-department spec, or direct request) into a downstream-proof spec — closure contract (AC) plus rock-solid validation (VS).
 
 **Mindset:** Requirement clarity, framing-bias guard, layer-aware data engineering thinking, concrete testability. The skill guards against three failure modes: accepting upstream framing without question (anchoring), specifying requirements that depend on implementation knowledge (leaky abstraction), and producing acceptance criteria that pass without proving the output is rock solid (validation theater).
 
@@ -12,17 +12,17 @@
 - `claude-dotfiles/standards/technical-standards.md` — cross-cutting rules
 - `claude-dotfiles/standards/pipeline-standards.md` — pipeline architecture
 
-**Vault:** `$QH_KNOWLEDGE/`
+**Vault:** `${PREFIX_UPPER}_KNOWLEDGE/`
 
 ---
 
 ## Trigger
 
 ```
-/qh-spec [JIRA-ID]
+/{prefix}-spec [JIRA-ID]
 ```
 
-Invoked by /qh-ticket (the orchestrator) or auto-chained from /qh-support after a Tier 2 bug is confirmed at Gate 3. May also be invoked directly when /qh-ticket has prepared the upstream artifact and state file. The argument is the Jira key.
+Invoked by /{prefix}-ticket (the orchestrator) or auto-chained from /{prefix}-support after a Tier 2 bug is confirmed at Gate 3. May also be invoked directly when /{prefix}-ticket has prepared the upstream artifact and state file. The argument is the Jira key.
 
 ---
 
@@ -34,7 +34,7 @@ Read in parallel:
 - `02-tickets/{KEY}/{KEY}-state.md` — ticket state, source of upstream artifact pointer
 - `02-tickets/{PARENT-KEY}/{PARENT-KEY}-state.md` — parent ticket state if sub-task
 - The upstream artifact named in state (one of):
-  - `02-tickets/{KEY}/{KEY}-support-handoff.md` (from /qh-support)
+  - `02-tickets/{KEY}/{KEY}-support-handoff.md` (from /{prefix}-support)
   - `02-tickets/{KEY}/{KEY}-whiteboard-verdict.md` (from /whiteboard)
   - `02-tickets/{KEY}/{KEY}-product-spec.md` (from product department)
   - (Direct invocation — no upstream artifact; work from Jira ticket description and {NAME} input)
@@ -59,7 +59,7 @@ Translate the upstream framing into a product-outcome problem statement. The fra
 **Problem Statement (one paragraph).**
 Outcome-framed, not implementation-framed. "The system must enable clinicians to identify patients with prior [PROCEDURE] procedures within 30 days of the encounter," not "Fix the inner join in `silver_[procedure].py` line 47."
 
-The problem statement is the same regardless of which fix option /qh-arch picks. If the statement changes when the design changes, it is implementation-framed and must be rewritten.
+The problem statement is the same regardless of which fix option /{prefix}-arch picks. If the statement changes when the design changes, it is implementation-framed and must be rewritten.
 
 ### Guard against anchoring
 
@@ -262,7 +262,7 @@ This gate is non-negotiable — validation is what makes the output trustworthy.
 
 ## Step 4 — FINISH
 
-Produce the remaining spec sections in one pass: Scope, Constraints, Data Dependencies, Success Metrics, Open Questions for /qh-arch, Standards Application, Definition of Done. Then run the explain-back gate before chaining.
+Produce the remaining spec sections in one pass: Scope, Constraints, Data Dependencies, Success Metrics, Open Questions for /{prefix}-arch, Standards Application, Definition of Done. Then run the explain-back gate before chaining.
 
 ### Scope — In / Out
 
@@ -287,7 +287,7 @@ No grey zone. Every related concern is either In or Out.
 - Source tables / views named
 - Schema files referenced (vault paths: `01-system-map/schemas/...`)
 - Column-level dependencies stated — every column the change reads or writes
-- New columns or schema changes — flagged explicitly, deferred to /qh-arch for design
+- New columns or schema changes — flagged explicitly, deferred to /{prefix}-arch for design
 
 ### Success Metrics
 
@@ -295,19 +295,19 @@ No grey zone. Every related concern is either In or Out.
 - Baseline + target stated
 - Who measures, when
 
-Required for every spec. Default when not directly measurable: "AC validated by VS pass rate + /qh-qa approval + regression-free pipeline run."
+Required for every spec. Default when not directly measurable: "AC validated by VS pass rate + /{prefix}-qa approval + regression-free pipeline run."
 
-### Open Questions for /qh-arch
+### Open Questions for /{prefix}-arch
 
 Each open question has:
 - The question
 - Options to evaluate
 - PM's preferred default with rationale ("default: A — because [reason]")
-- Or "no preference, /qh-arch decides" if PM genuinely has no view
+- Or "no preference, /{prefix}-arch decides" if PM genuinely has no view
 
 "None — design space fully defined" is valid when zero open questions remain. Required section — if the PM thinks there are no open questions, state that explicitly.
 
-No "TBD" without a named decider and deadline. Every gap is either resolved here or handed to /qh-arch as a bounded question.
+No "TBD" without a named decider and deadline. Every gap is either resolved here or handed to /{prefix}-arch as a bounded question.
 
 ### Standards Application
 
@@ -321,8 +321,8 @@ Baseline (every spec — non-negotiable):
 1. All AC validated by VS at pass-rate target
 2. All VS sub-scenarios pass 100%
 3. No forbidden conditions hit
-4. /qh-qa approval received
-5. {NAME} explain-back confirmed at /qh-dev edge case gate
+4. /{prefix}-qa approval received
+5. {NAME} explain-back confirmed at /{prefix}-dev edge case gate
 
 Per-spec additions: any spec-specific items (runtime threshold, output volume, etc.)
 
@@ -332,12 +332,12 @@ This gate is non-negotiable. It is the learning step.
 
 State:
 
-> "Spec complete. Before I chain to /qh-arch, explain back in two sentences:
+> "Spec complete. Before I chain to /{prefix}-arch, explain back in two sentences:
 > (1) What we're building — the agreed deliverable.
 > (2) How we'll prove it's rock solid — the validation that closes the loop.
-> After your explain-back, the spec is approved and /qh-arch starts."
+> After your explain-back, the spec is approved and /{prefix}-arch starts."
 
-Wait for {NAME}'s explain-back. The skill does not write the spec file or chain to /qh-arch until {NAME} has stated the deliverable and the validation in his own words.
+Wait for {NAME}'s explain-back. The skill does not write the spec file or chain to /{prefix}-arch until {NAME} has stated the deliverable and the validation in his own words.
 
 If {NAME} replies "skip" or "proceed," resist once: "Two sentences. This is the learning gate." If he insists after that, proceed — he is the principal.
 
@@ -399,7 +399,7 @@ Status: APPROVED
 - Target: [post-fix state]
 - Measured by: [who, when]
 
-## Open Questions for /qh-arch
+## Open Questions for /{prefix}-arch
 1. [Question]
    Options: [A, B, C]
    Default: [A] — Reason: [rationale]
@@ -417,8 +417,8 @@ Baseline:
 1. All AC validated by VS at pass-rate target
 2. All VS sub-scenarios pass 100%
 3. No forbidden conditions hit
-4. /qh-qa approval received
-5. {NAME} explain-back confirmed at /qh-dev edge case gate
+4. /{prefix}-qa approval received
+5. {NAME} explain-back confirmed at /{prefix}-dev edge case gate
 
 Per-spec additions:
 - [any spec-specific items]
@@ -434,16 +434,16 @@ Per-spec additions:
 
 Update `02-tickets/{KEY}/{KEY}-state.md`:
 - Status: SPEC_APPROVED
-- Next skill: /qh-arch
+- Next skill: /{prefix}-arch
 - Key decisions logged: problem statement summary, AC count, VS count, pass rate target
 
 ### Session log + archive
 
-Write session log to `02-tickets/{KEY}/{KEY}-session-YYYY-MM-DD.md` and append to `~/qh-output/{KEY}/YYYY-MM-DD.md`. Both — never one. See Skill Standard Rule 13.
+Write session log to `02-tickets/{KEY}/{KEY}-session-YYYY-MM-DD.md` and append to `${PREFIX_UPPER}_KNOWLEDGE/output/{KEY}/YYYY-MM-DD.md`. Both — never one. See Skill Standard Rule 13.
 
-### Stop and hand off to /qh-arch (next thread)
+### Stop and hand off to /{prefix}-arch (next thread)
 
-Do not auto-chain. /qh-spec output is heavy (17 sections, multi-VS) and chaining into /qh-arch in the same thread burns the cache window with no benefit. Start /qh-arch in a fresh thread.
+Do not auto-chain. /{prefix}-spec output is heavy (17 sections, multi-VS) and chaining into /{prefix}-arch in the same thread burns the cache window with no benefit. Start /{prefix}-arch in a fresh thread.
 
 End output:
 
@@ -451,33 +451,33 @@ End output:
 Spec written: 02-tickets/{KEY}/{KEY}-spec.md
 Status: APPROVED
 
-Chain step complete. Start a fresh thread for /qh-arch to keep context lean.
+Chain step complete. Start a fresh thread for /{prefix}-arch to keep context lean.
 
 ═══════════════════════════════════════════════════════════════
 Next session starter prompt (copy into a new thread):
 ═══════════════════════════════════════════════════════════════
 
-/qh-arch {KEY}
+/{prefix}-arch {KEY}
 
 The spec is at 02-tickets/{KEY}/{KEY}-spec.md (Status: APPROVED).
-/qh-arch reads the spec, the four standards docs at claude-dotfiles/, and any
+/{prefix}-arch reads the spec, the four standards docs at claude-dotfiles/, and any
 upstream artifact referenced in the spec's Source section. Produces the
 design that satisfies the AC and validation. Chain-level Gate 2 (explain-back
-after design) fires before /qh-dev starts.
+after design) fires before /{prefix}-dev starts.
 
-Open Questions for /qh-arch: see the spec section by that name.
+Open Questions for /{prefix}-arch: see the spec section by that name.
 Pass rate targets to honor: see Validation Scenarios.
 
 ═══════════════════════════════════════════════════════════════
 ```
 
-The skill stops here. {NAME} copies the starter prompt into a new thread to begin /qh-arch.
+The skill stops here. {NAME} copies the starter prompt into a new thread to begin /{prefix}-arch.
 
 ---
 
 ## Rules
 
-- No solution design — name options in Open Questions only, leave design to /qh-arch
+- No solution design — name options in Open Questions only, leave design to /{prefix}-arch
 - No code changes, no commits, no auto-execution. Read-only on all systems except the vault.
 - No PHI in any artifact. Shape descriptors and synthetic data only in VS. Regression cases reference Support Evidence by ID. See Technical Standards Rule 1.
 - AC is binary or it is rewritten. No "should" / "may" / "appears to" / "looks good."

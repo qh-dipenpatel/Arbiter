@@ -2,11 +2,16 @@
 # Trigger: PreToolUse — Write|Edit|MultiEdit
 # Scope: file_path in Write/Edit/MultiEdit tool_input; checks against ARBITER_CODE_DIR
 # Action: block writes to the read-only code reference directory
+# Bash commands are covered by pre-tool-bash-guard-code-dir.py (separate hook entry).
 # On block: prints JSON with hookEventName + permissionDecision:deny + permissionDecisionReason, then exit 0
 # If filter: none — Write|Edit|MultiEdit matcher limits scope; path check is O(1)
 
-# Feature disabled if ARBITER_CODE_DIR not configured
+# Guard is inactive if ARBITER_CODE_DIR is not configured. Say so visibly (systemMessage shown to the
+# user, same text on stderr for logs) but never block: an unset variable must not stop real work.
 if [ -z "${ARBITER_CODE_DIR:-}" ]; then
+    WARN="WARNING: ARBITER_CODE_DIR is not set, so the read-only code directory guard is NOT active. Set it in your shell profile to protect the code mirror."
+    echo "$WARN" >&2
+    python3 -c "import json,sys; print(json.dumps({'systemMessage': sys.argv[1]}))" "$WARN"
     exit 0
 fi
 

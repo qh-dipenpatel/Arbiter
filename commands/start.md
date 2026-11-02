@@ -33,7 +33,7 @@ LAUNCH CHECKLIST
   [ ] Mode       — confirmed from invocation or from one clarifying question
   ─── PAUSE POINT — state mode + what will load; wait for confirmation ──────────
   [ ] Repos      — sync_repos.sh
-  [ ] Vault      — confirm $QH_KNOWLEDGE is accessible
+  [ ] Vault      — confirm ${PREFIX_UPPER}_KNOWLEDGE is accessible
   [ ] Jira       — delta-driven pull (depth per mode)
   [ ] Blockers   — flag urgent, blocked, or stale ephemeral facts
   [ ] Saved      — agenda to archive + vault landing
@@ -58,20 +58,20 @@ State which mode is running and what it will load. Wait for confirmation before 
 ## Step 2 — Repo Sync (Item 3)
 
 ```bash
-if [ -x "$QH_SCRIPTS/sync/sync_repos.sh" ]; then
-  "$QH_SCRIPTS/sync/sync_repos.sh"
+if [ -x "${PREFIX_UPPER}_SCRIPTS/sync/sync_repos.sh" ]; then
+  "${PREFIX_UPPER}_SCRIPTS/sync/sync_repos.sh"
 else
-  echo "SKIP: sync_repos.sh not installed in \$QH_SCRIPTS/sync/"
+  echo "SKIP: sync_repos.sh not installed in \${PREFIX_UPPER}_SCRIPTS/sync/"
 fi
 ```
 
-Arbiter does not ship `sync_repos.sh`; it is a personal script you add to `$QH_SCRIPTS/sync/`. When present, it pulls latest `main` for all company repos into `$ARBITER_CODE_DIR`. Fast when up to date. Run every session — no exceptions. Skip gracefully if the script fails; log the skip in the checklist output.
+Arbiter does not ship `sync_repos.sh`; it is a personal script you add to `${PREFIX_UPPER}_SCRIPTS/sync/`. When present, it pulls latest `main` for all company repos into `$ARBITER_CODE_DIR`. Fast when up to date. Run every session — no exceptions. Skip gracefully if the script fails; log the skip in the checklist output.
 
 ---
 
 ## Step 3 — Vault Health (Item 4)
 
-Confirm your vault directory (`$QH_KNOWLEDGE`) is accessible. Skip gracefully if not found; log the skip.
+Confirm your vault directory (`${PREFIX_UPPER}_KNOWLEDGE`) is accessible. Skip gracefully if not found; log the skip.
 
 ---
 
@@ -173,7 +173,7 @@ Update `last_sync` to current timestamp. Preserve all entries. PHI check before 
 **5b — Ephemeral fact age:**
 
 ```bash
-find $QH_KNOWLEDGE/02-tickets \
+find ${PREFIX_UPPER}_KNOWLEDGE/02-tickets \
   -name "*-state.md" \
   -exec grep -l "EPHEMERAL:time-sensitive" {} +
 ```
@@ -239,7 +239,7 @@ Pull today's calendar. Load `01-system-map/clients/[CLIENT].md` if specified. Fi
 
 **Meeting notes:**
 ```bash
-ls $QH_MEETINGS/ 2>/dev/null | tail -10
+ls ${PREFIX_UPPER}_MEETINGS/ 2>/dev/null | tail -10
 ```
 
 ```
@@ -272,7 +272,7 @@ Calendar and meeting notes: same as weekly mode above.
 
 ### 6a — Present
 
-**YESTERDAY source:** Read `~/qh-output/session-costs.jsonl`. Filter entries where `date` = yesterday. For each entry calculate duration from `start` and `end` fields (HH:MM ET strings). Display `tasks` label and duration per thread, then total. If no entries for yesterday, omit the section silently.
+**YESTERDAY source:** Read `${PREFIX_UPPER}_KNOWLEDGE/output/session-costs.jsonl`. Filter entries where `date` = yesterday. For each entry calculate duration from `start` and `end` fields (HH:MM ET strings). Display `tasks` label and duration per thread, then total. If no entries for yesterday, omit the section silently.
 
 ```
 TODAY — [Day, YYYY-MM-DD]  [MODE]
@@ -307,7 +307,7 @@ What are we working on?
 
 ### 6b — Archive
 
-Path: `~/qh-output/_start/{YYYY-MM-DD}.md`
+Path: `${PREFIX_UPPER}_KNOWLEDGE/output/_start/{YYYY-MM-DD}.md`
 
 Human browsing only. Not indexed.
 
@@ -322,12 +322,12 @@ Use wiki links `[[CD-XXX]]` for ticket references so the file joins the vault gr
 ### 6d — Session cost
 
 ```bash
-[ -f "$QH_SCRIPTS/session_cost.py" ] && python3 "$QH_SCRIPTS/session_cost.py" --mode=start
+[ -f "${PREFIX_UPPER}_SCRIPTS/session_cost.py" ] && python3 "${PREFIX_UPPER}_SCRIPTS/session_cost.py" --mode=start
 ```
 
 Optional personal script, not shipped with Arbiter. Skip silently if absent. Runs silently on success. Idempotent.
 
-Confirm: `Saved to ~/qh-output/_start/{date}.md and 00-landing/{YYYY}/{MM}/{date}-start.md`
+Confirm: `Saved to ${PREFIX_UPPER}_KNOWLEDGE/output/_start/{date}.md and 00-landing/{YYYY}/{MM}/{date}-start.md`
 
 ---
 

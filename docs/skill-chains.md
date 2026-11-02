@@ -2,7 +2,7 @@
 
 Created by Dipen Patel.
 
-> Skill names in this document use `{prefix}` as a placeholder. The six ticket-chain skills get the prefix you set at install time. If your prefix is `dp`, `/{prefix}-ticket` means `/dp-ticket`. If your prefix is `qh`, it means `/qh-ticket`. Session skills (`/start`, `/close`, `/draft`, etc.) have no prefix.
+> Skill names in this document use `{prefix}` as a placeholder. The six ticket-chain skills get the prefix you set at install time. If your prefix is `dp`, `/{prefix}-ticket` means `/dp-ticket`. If your prefix is `ab`, it means `/ab-ticket`. Session skills (`/start`, `/close`, `/draft`, etc.) have no prefix.
 
 ---
 

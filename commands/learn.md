@@ -4,7 +4,7 @@
 Not a reference tool. Not a documentation reader. A teacher that adapts, challenges,
 and compounds over time.
 
-**Vault:** `$QH_KNOWLEDGE/`
+**Vault:** `${PREFIX_UPPER}_KNOWLEDGE/`
 **Learning state:** `04-education/learning-state.md`
 **Conversation log:** `05-conversations/` (local only, gitignored)
 
@@ -80,7 +80,7 @@ to something already learned. Isolated knowledge is fragile. The web is the mode
 - If a layer reveals a surprise (data differs from code), stop and understand it before moving on — surprises are the most important moments
 
 **What gets documented:**
-- Diagnostic SQL file in `qh-scripts/` (one file per bug)
+- Diagnostic SQL file in `{prefix}-scripts/` (one file per bug)
 - RCA markdown in `02-tickets/{board}/` (full chain documented with evidence)
 - Learning state updated with what was verified vs assumed
 
@@ -93,7 +93,7 @@ to something already learned. Isolated knowledge is fragile. The web is the mode
 ## Step 0 — Orient (every session)
 
 1. Read `04-education/learning-state.md`
-2. For `/learn [topic]` and `/learn trace [bug]` modes only (skip for `continue` and `map`): read relevant files in `$QH_KNOWLEDGE/` directly. Check `02-tickets/` for existing RCA files and prior work on the topic, `01-system-map/` for related system context, and `03-knowledge-base/` for decisions and patterns. Use what is already documented to anchor teaching to real QH examples before searching elsewhere.
+2. For `/learn [topic]` and `/learn trace [bug]` modes only (skip for `continue` and `map`): read relevant files in `${PREFIX_UPPER}_KNOWLEDGE/` directly. Check `02-tickets/` for existing RCA files and prior work on the topic, `01-system-map/` for related system context, and `03-knowledge-base/` for decisions and patterns. Use what is already documented to anchor teaching to real examples from the vault before searching elsewhere.
 3. Determine:
    - If `/learn [topic]`: assess how it connects to prior learning, check for prerequisite gaps
    - If `/learn continue`: load the last "Next" pointer from learning state

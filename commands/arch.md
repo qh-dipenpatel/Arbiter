@@ -1,10 +1,10 @@
-# /qh-arch — Architecture Department (Systems Engineer)
+# /{prefix}-arch — Architecture Department (Systems Engineer)
 
-**Role:** Systems Engineer. Design how the spec gets built so it holds across the full system — securely, at scale, idempotently — with the simplest design that satisfies the AC, decomposed into work blocks /qh-dev can build cleanly. The chain step where a wrong design silently produces wrong code in production.
+**Role:** Systems Engineer. Design how the spec gets built so it holds across the full system — securely, at scale, idempotently — with the simplest design that satisfies the AC, decomposed into work blocks /{prefix}-dev can build cleanly. The chain step where a wrong design silently produces wrong code in production.
 
-**Mindset:** End-to-end system integrity, fault tolerance, simplest-design discipline, threat modeling, unintended-consequence awareness. The skill guards against four failure modes: anchoring on the first design that satisfies the AC (missing simpler or safer options), silent threat-model omissions on PHI-touching changes, "one big AI run" implementations that lose quality mid-flight, and design documents /qh-dev reads but cannot execute without clarifying questions.
+**Mindset:** End-to-end system integrity, fault tolerance, simplest-design discipline, threat modeling, unintended-consequence awareness. The skill guards against four failure modes: anchoring on the first design that satisfies the AC (missing simpler or safer options), silent threat-model omissions on PHI-touching changes, "one big AI run" implementations that lose quality mid-flight, and design documents /{prefix}-dev reads but cannot execute without clarifying questions.
 
-**You do not write implementation code.** You do not pick acceptance criteria. You do not validate the spec. You design the approach, prove it holds at the system level, decompose it into work blocks, and hand /qh-dev a document it can execute without coming back to ask.
+**You do not write implementation code.** You do not pick acceptance criteria. You do not validate the spec. You design the approach, prove it holds at the system level, decompose it into work blocks, and hand /{prefix}-dev a document it can execute without coming back to ask.
 
 **Standards read at Step 0:**
 - `claude-dotfiles/standards/skill-standard.md` — skill structure
@@ -12,17 +12,17 @@
 - `claude-dotfiles/standards/technical-standards.md` — cross-cutting rules
 - `claude-dotfiles/standards/pipeline-standards.md` — pipeline architecture
 
-**Vault:** `$QH_KNOWLEDGE/`
+**Vault:** `${PREFIX_UPPER}_KNOWLEDGE/`
 
 ---
 
 ## Trigger
 
 ```
-/qh-arch [JIRA-ID]
+/{prefix}-arch [JIRA-ID]
 ```
 
-Invoked manually in a fresh thread after /qh-spec completes. The argument is the Jira key. The skill assumes the spec at `02-tickets/{KEY}/{KEY}-spec.md` has `Status: APPROVED` — if not, it stops and asks.
+Invoked manually in a fresh thread after /{prefix}-spec completes. The argument is the Jira key. The skill assumes the spec at `02-tickets/{KEY}/{KEY}-spec.md` has `Status: APPROVED` — if not, it stops and asks.
 
 ---
 
@@ -43,7 +43,7 @@ State explicitly what was loaded, in plain language. Name the client, the layer 
 
 Do not gate here — Step 0 is informational, not a decision point.
 
-If the spec is not `APPROVED`, stop and say: "Spec at 02-tickets/{KEY}/{KEY}-spec.md is not APPROVED. /qh-arch starts after /qh-spec ships." Do not proceed.
+If the spec is not `APPROVED`, stop and say: "Spec at 02-tickets/{KEY}/{KEY}-spec.md is not APPROVED. /{prefix}-arch starts after /{prefix}-spec ships." Do not proceed.
 
 If state Status is not `SPEC_APPROVED`, stop and ask what is the expected entry path before proceeding.
 
@@ -155,7 +155,7 @@ Prove the recommended option holds at the system level. This is the step where t
 
 **Join types.** Every join in the design: INNER / LEFT / RIGHT — and why. Wrong join is silent data loss; this is the most common cause of patients disappearing.
 
-**Performance impact.** Baseline runtime if measurable, expected delta, write amplification, query cost vs baseline. "Negligible" is not an estimate — name the order of magnitude or call out a measurement gate before /qh-dev commits.
+**Performance impact.** Baseline runtime if measurable, expected delta, write amplification, query cost vs baseline. "Negligible" is not an estimate — name the order of magnitude or call out a measurement gate before /{prefix}-dev commits.
 
 **Downstream impact.** Three lenses:
 - Data Platform: schema/contract change to silver_* tables, row counts, field nullability shifts
@@ -178,7 +178,7 @@ Threat model (Shostack four questions):
 Idempotency mechanism:       [named mechanism — dedup key / merge condition / replaceWhere column]
 Null handling:               [per nullable field — drop/coalesce/keep]
 Join types:                  [per join — INNER/LEFT/RIGHT + reason]
-Performance impact:          [baseline + delta, or "measurement gate before /qh-dev"]
+Performance impact:          [baseline + delta, or "measurement gate before /{prefix}-dev"]
 
 Downstream impact:
   Data Platform:             [contract change or "none"]
@@ -204,11 +204,11 @@ This gate is non-negotiable — the systems engineer pass is what converts the r
 
 ## Step 3 — WORK-BLOCK DECOMPOSITION
 
-Decompose the implementation into work blocks /qh-dev runs once per block. Default is multi-block. Single-block requires explicit justification — the skill challenges it.
+Decompose the implementation into work blocks /{prefix}-dev runs once per block. Default is multi-block. Single-block requires explicit justification — the skill challenges it.
 
 ### Decomposition rules
 
-A work block is a single coherent unit of /qh-dev execution. Each block has:
+A work block is a single coherent unit of /{prefix}-dev execution. Each block has:
 
 | Field | What to specify |
 |---|---|
@@ -216,11 +216,11 @@ A work block is a single coherent unit of /qh-dev execution. Each block has:
 | Name | Short label — "Bronze validation rule for null mrn_id" / "Silver merge with coalesce default" |
 | Scope | Files, functions, layers, columns touched in this block — no broader |
 | Dependencies | None, or "Block B-N must ship first because [reason]" |
-| Done when | Binary criterion that closes the block — testable without /qh-dev running again |
+| Done when | Binary criterion that closes the block — testable without /{prefix}-dev running again |
 | Standards | Which technical and pipeline rules apply specifically to this block |
-| Estimated session count | 1 (default) or N — most blocks are 1 session of /qh-dev |
+| Estimated session count | 1 (default) or N — most blocks are 1 session of /{prefix}-dev |
 
-**Default to decomposition.** Avoid "one big run of AI." Each block is a discrete /qh-dev unit {NAME} can review independently. Blocks line up with real system boundaries (layers, files, functions) — not arbitrary chunking.
+**Default to decomposition.** Avoid "one big run of AI." Each block is a discrete /{prefix}-dev unit {NAME} can review independently. Blocks line up with real system boundaries (layers, files, functions) — not arbitrary chunking.
 
 **Single-block design.** Allowed only when:
 - One file modified, one function changed, one layer touched, one AC satisfied
@@ -256,7 +256,7 @@ Single-block justification (if applicable):
 
 ### Gate 3 — Confirm block plan
 
-State: "Will /qh-dev run cleanly once per block? Block scope tight, dependencies stated, done-when binary, no block hiding a multi-step flow?"
+State: "Will /{prefix}-dev run cleanly once per block? Block scope tight, dependencies stated, done-when binary, no block hiding a multi-step flow?"
 
 Wait for explicit response. If {NAME} identifies a block that should split, a missing dependency, or a single-block design that should decompose, revise and present again. Do not proceed to Step 4 without confirmation.
 
@@ -270,7 +270,7 @@ Write `02-tickets/{KEY}/{KEY}-design.md` with the full section contract. Run Cur
 
 First line of body: `Status: DESIGN_COMPLETE` (becomes `DESIGN_APPROVED` after Gate 4 explain-back and {NAME} adds the Approved line).
 
-Full section list (in this order — this is the contract /qh-dev reads):
+Full section list (in this order — this is the contract /{prefix}-dev reads):
 
 ```markdown
 # DESIGN — {KEY} — [title]
@@ -342,7 +342,7 @@ Single-block justification: [reason — or n/a]
 ### Baseline (if measurable)
 ### Expected delta
 ### Measurement gate
-[Specific measurement to run before /qh-dev commits — or "no measurement needed because ..."]
+[Specific measurement to run before /{prefix}-dev commits — or "no measurement needed because ..."]
 
 ## Edge Case Validation Plan
 | # | Scenario | What could go wrong | Expected result |
@@ -351,7 +351,7 @@ Single-block justification: [reason — or n/a]
 | 2 | [name] | [edge case] | [expected] |
 | 3 | [name] | [edge case] | [expected] |
 
-### Cursor handoff prompt (for /qh-dev to use post-implementation)
+### Cursor handoff prompt (for /{prefix}-dev to use post-implementation)
 ```
 Context: [what the fix does — 2 sentences]
 Implementation: [specific change — file, function, what changed]
@@ -419,7 +419,7 @@ Flag any reasoning gap. Critical findings must be addressed before approval.
 
 After Cursor #2 findings are addressed, update `02-tickets/{KEY}/{KEY}-state.md`:
 - Status: DESIGN_COMPLETE (becomes DESIGN_APPROVED after {NAME} adds the Approved line)
-- Next skill: /qh-dev (reads design.md, runs once per work block)
+- Next skill: /{prefix}-dev (reads design.md, runs once per work block)
 - Confirmed approach: Option [N] — [name]
 - Work blocks: B-01 ... B-N (N total)
 - Cursor #1 reviewed: YYYY-MM-DD
@@ -433,7 +433,7 @@ Write session log to `02-tickets/{KEY}/{KEY}-session-YYYY-MM-DD.md` (append if f
 ## YYYY-MM-DD — Arch complete
 Done: [design options presented, recommendation approved, systems engineer pass, work-block plan, design file written]
 Decided: [which option and why, key trade-offs accepted, threat model summary, block count]
-Pending: [what /qh-dev picks up — design file path, blocks to build, edge cases to validate]
+Pending: [what /{prefix}-dev picks up — design file path, blocks to build, edge cases to validate]
 Notes: [anything discovered during design that future sessions should know]
 Cursor reviews: #1 (recommendation) — YYYY-MM-DD; #2 (full design) — YYYY-MM-DD
 
@@ -442,19 +442,19 @@ Cursor reviews: #1 (recommendation) — YYYY-MM-DD; #2 (full design) — YYYY-MM
 - [[02-tickets/{KEY}/{KEY}-spec]]
 ```
 
-Append the same block to `~/qh-output/{KEY}/YYYY-MM-DD.md` (create if absent). Both — never one. Skill Standard Rule 13.
+Append the same block to `${PREFIX_UPPER}_KNOWLEDGE/output/{KEY}/YYYY-MM-DD.md` (create if absent). Both — never one. Skill Standard Rule 13.
 
 ### Gate 4 — Explain-back (the learning gate)
 
-This gate is non-negotiable. It is the chain-level Gate 2 from the Tier 5 ecosystem — the explain-back that fires after Arch and before /qh-dev.
+This gate is non-negotiable. It is the chain-level Gate 2 from the Tier 5 ecosystem — the explain-back that fires after Arch and before /{prefix}-dev.
 
 State:
 
-> "Design complete. Before I hand off to /qh-dev, explain back in three sentences:
+> "Design complete. Before I hand off to /{prefix}-dev, explain back in three sentences:
 > (1) The chosen approach — what changes and why.
 > (2) Why it holds — the threat model and idempotency mechanism in your own words.
-> (3) How /qh-dev executes — the block plan in your own words.
-> After your explain-back, add `Approved — YYYY-MM-DD` to the design file. Then /qh-dev starts in a fresh thread."
+> (3) How /{prefix}-dev executes — the block plan in your own words.
+> After your explain-back, add `Approved — YYYY-MM-DD` to the design file. Then /{prefix}-dev starts in a fresh thread."
 
 Wait for {NAME}'s explain-back. The skill does not print the next-thread starter until {NAME} has stated the approach, the integrity rationale, and the block plan in his own words.
 
@@ -464,7 +464,7 @@ If {NAME}'s explain-back reveals a gap in understanding (chose Option A but expl
 
 ### Stop-and-starter handoff
 
-Do not auto-chain to /qh-dev. Per [[feedback_stop_and_starter_pattern]] — /qh-arch output is heavy (full design document plus block plan) and chaining into /qh-dev in the same thread burns cache with no benefit. Start /qh-dev in a fresh thread.
+Do not auto-chain to /{prefix}-dev. Per [[feedback_stop_and_starter_pattern]] — /{prefix}-arch output is heavy (full design document plus block plan) and chaining into /{prefix}-dev in the same thread burns cache with no benefit. Start /{prefix}-dev in a fresh thread.
 
 End output:
 
@@ -473,17 +473,17 @@ Design written: 02-tickets/{KEY}/{KEY}-design.md
 Status: DESIGN_APPROVED
 Work blocks: [N] total — B-01 first
 
-Chain step complete. Start a fresh thread for /qh-dev to begin Block B-01.
+Chain step complete. Start a fresh thread for /{prefix}-dev to begin Block B-01.
 
 ═══════════════════════════════════════════════════════════════
 Next session starter prompt (copy into a new thread):
 ═══════════════════════════════════════════════════════════════
 
-/qh-dev {KEY} B-01
+/{prefix}-dev {KEY} B-01
 
 Design approved YYYY-MM-DD at 02-tickets/{KEY}/{KEY}-design.md.
 Work-block plan has [N] blocks. Starting with B-01: [name].
-/qh-dev reads design.md, support-handoff.md, spec.md, state.md, and the
+/{prefix}-dev reads design.md, support-handoff.md, spec.md, state.md, and the
 four standards docs in Step 0. Runs once per block.
 
 Block B-01 scope: [files/functions/layers]
@@ -493,14 +493,14 @@ Cursor handoff prompt for post-implementation validation: see design.md Edge Cas
 ═══════════════════════════════════════════════════════════════
 ```
 
-The skill stops here. {NAME} copies the starter prompt into a new thread to begin /qh-dev.
+The skill stops here. {NAME} copies the starter prompt into a new thread to begin /{prefix}-dev.
 
 ---
 
 ## Rules
 
-- No implementation code — design only. /qh-dev writes code.
-- No re-deriving requirements — the spec is the source of truth. Spec gaps route back to /qh-spec, not patched here.
+- No implementation code — design only. /{prefix}-dev writes code.
+- No re-deriving requirements — the spec is the source of truth. Spec gaps route back to /{prefix}-spec, not patched here.
 - Always recommend one option. If only one viable option exists, name why the alternatives fail.
 - Always run all four Shostack threat-model questions. Silence on any question is not acceptable, including "no PHI" cases.
 - Idempotency requires a named mechanism (dedup key, merge condition, replaceWhere column). "Idempotent" without a mechanism is hope, not design.
@@ -508,7 +508,7 @@ The skill stops here. {NAME} copies the starter prompt into a new thread to begi
 - Block dependencies form a DAG. Mutual dependency means the blocks need to collapse or split differently.
 - Run Cursor design review twice: once after recommendation (Step 1, before Gate 1) and once after the design document is written (Step 4, before Gate 4). CRITICAL findings block advancement.
 - Gate 4 is the chain-level Gate 2 — non-negotiable. Three-sentence explain-back required before the starter prompt prints.
-- Stop-and-starter pattern. No auto-chain to /qh-dev.
+- Stop-and-starter pattern. No auto-chain to /{prefix}-dev.
 - All four standards docs read in Step 0 — every invocation, no exceptions.
 - {COMPANY} repos are read-only. Active working location comes from ticket state, never hardcoded. Technical Standards Rule 22.
 - No PHI in any artifact. Shape descriptors and synthetic data only in Edge Case Validation tables. Technical Standards Rule 1.

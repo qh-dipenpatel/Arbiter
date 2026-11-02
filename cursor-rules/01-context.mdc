@@ -36,10 +36,10 @@ For latest active ticket state, read `02-tickets/delta.json`.
 
 | Label | Path |
 |---|---|
-| Vault | `$QH_KNOWLEDGE` |
+| Vault | `${PREFIX_UPPER}_KNOWLEDGE` |
 | Dotfiles | `$CLAUDE_DOTFILES` |
-| Scripts | `$QH_SCRIPTS` |
-| Meeting notes | `$QH_MEETINGS` |
+| Scripts | `${PREFIX_UPPER}_SCRIPTS` |
+| Meeting notes | `${PREFIX_UPPER}_MEETINGS` |
 
 ---
 
@@ -62,14 +62,14 @@ Skills live in `claude-dotfiles/commands/`. Reference these for workflow pattern
 |---|---|
 | `/start` | Beginning of every session: Jira sync, vault health, blockers |
 | `/close` | End of every work block: session log, memory, dotfiles commit, vault commit |
-| `/qh-ticket [ID]` | Work a Jira ticket: investigate, coordinate, draft comment |
+| `/{prefix}-ticket [ID]` | Work a Jira ticket: investigate, coordinate, draft comment |
 | `/explore [topic]` | Learn a new system area, pipeline, or client context |
 | `/learn [topic]` | Deep learning session |
 | `/weekly [CLIENT]` | Before a client call |
-| `/qh-spec [ID]` | Define WHAT: requirements, acceptance criteria, success metrics |
-| `/qh-arch [ID]` | Design HOW: options, tradeoffs, recommendation |
-| `/qh-dev [ID]` | Implementation after approved design |
-| `/qh-qa [ID]` | Adversarial review before PR |
+| `/{prefix}-spec [ID]` | Define WHAT: requirements, acceptance criteria, success metrics |
+| `/{prefix}-arch [ID]` | Design HOW: options, tradeoffs, recommendation |
+| `/{prefix}-dev [ID]` | Implementation after approved design |
+| `/{prefix}-qa [ID]` | Adversarial review before PR |
 
 **In Cursor:** these skills don't auto-execute. Read the skill file in `claude-dotfiles/commands/[skill].md` and follow the steps manually, or ask Cursor to follow the steps.
 

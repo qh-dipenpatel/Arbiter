@@ -17,7 +17,7 @@ You receive this Slack message at 9:15 AM:
 You open Jira. There is already a ticket:
 
 ```
-CD-200 | Bug | High
+DI-200 | Bug | High
 Title: Lakewood Health TAVR patients missing from clinical report
 Status: Open
 Reporter: Sarah Chen (Lakewood Health client contact)
@@ -27,13 +27,13 @@ This is a bug ticket. The chain is:
 
 ```
 /start
-/ah-ticket CD-200
-/ah-support CD-200
-/ah-spec CD-200
-/ah-arch CD-200
+/ah-ticket DI-200
+/ah-support DI-200
+/ah-spec DI-200
+/ah-arch DI-200
 [approve design]
-/ah-dev CD-200
-/ah-qa CD-200
+/ah-dev DI-200
+/ah-qa DI-200
 /close
 ```
 
@@ -42,7 +42,7 @@ This is a bug ticket. The chain is:
 ## Step 1: Start the session
 
 ```
-/start ticket CD-200
+/start ticket DI-200
 ```
 
 The checklist runs. You see:
@@ -51,30 +51,30 @@ The checklist runs. You see:
 /start — 2026-06-03
 
 Jira sync complete. 3 open tickets assigned to you.
-  CD-200  Lakewood Health TAVR missing patients  [OPEN / High]
-  CD-195  Riverside pipeline timeout  [IN PROGRESS]
-  CD-188  Documentation update  [BLOCKED — waiting on Data Platform]
+  DI-200  Lakewood Health TAVR missing patients  [OPEN / High]
+  DI-195  Riverside pipeline timeout  [IN PROGRESS]
+  DI-188  Documentation update  [BLOCKED — waiting on Data Platform]
 
-Vault health: 12 state files checked, 11 current. CD-188 state is stale (last updated 6 days ago).
-Open blockers: CD-188 waiting on Data Platform schema decision.
+Vault health: 12 state files checked, 11 current. DI-188 state is stale (last updated 6 days ago).
+Open blockers: DI-188 waiting on Data Platform schema decision.
 
-Ready. Start with CD-200 or pick up CD-195?
+Ready. Start with DI-200 or pick up DI-195?
 ```
 
-You type: `CD-200`
+You type: `DI-200`
 
 ---
 
 ## Step 2: Orient on the ticket
 
 ```
-/ah-ticket CD-200
+/ah-ticket DI-200
 ```
 
 The skill reads Jira, checks the vault for a Lakewood Health client file, and produces the ORIENT block:
 
 ```
-ORIENT — CD-200 — Lakewood Health TAVR patients missing from clinical report
+ORIENT — DI-200 — Lakewood Health TAVR patients missing from clinical report
 
 CONTEXT
   Client reported 22 TAVR patients are missing from the monthly clinical report.
@@ -121,7 +121,7 @@ The skill classifies the ticket as a bug and routes to `/ah-support`.
 ## Step 3: Diagnose the bug
 
 ```
-/ah-support CD-200
+/ah-support DI-200
 ```
 
 The skill reads the state file and begins the diagnostic trace.
@@ -129,7 +129,7 @@ The skill reads the state file and begins the diagnostic trace.
 **INTAKE**
 
 ```
-INTAKE — CD-200
+INTAKE — DI-200
 
 Reproducing the gap:
   silver_std_tavr WHERE client = 'lakewood' AND report_period = '2026-05'
@@ -150,7 +150,7 @@ PHI check: Query returns aggregate counts only. No patient-level data in this co
 The skill traces Raw to Bronze to Silver:
 
 ```
-LAYER TRACE — CD-200
+LAYER TRACE — DI-200
 
 Raw layer:
   raw_lakewood_tavr WHERE load_date = '2026-05-20'
@@ -178,7 +178,7 @@ Root cause confirmed:
 ROOT CAUSE
   22 records filtered at Bronze ingestion due to NULL encounter_date.
   Filter is in tavr_bronze.py, line 47: df.filter(col("encounter_date").isNotNull())
-  This filter was added 2026-03-10 (CD-157) to prevent downstream null propagation.
+  This filter was added 2026-03-10 (DI-157) to prevent downstream null propagation.
 
 EVIDENCE
   Raw count: 500 — Bronze count: 478 — Silver count: 478
@@ -190,7 +190,7 @@ FIX OPTIONS (not a decision — passing to /ah-spec)
   Option C: Pass null records through with quarantine_ind = 1 for manual review
 
 CROSS TEAM FLAG
-  The filter in tavr_bronze.py was added per CD-157 (Data Platform decision).
+  The filter in tavr_bronze.py was added per DI-157 (Data Platform decision).
   Any change to this filter requires Data Platform review before implementation.
 ```
 
@@ -199,13 +199,13 @@ CROSS TEAM FLAG
 ## Step 4: Write the spec
 
 ```
-/ah-spec CD-200
+/ah-spec DI-200
 ```
 
 The skill reads the support handoff and produces requirements. The RESTATE gate fires first:
 
 ```
-RESTATE — CD-200
+RESTATE — DI-200
 
 Problem: 22 Lakewood TAVR records have null encounter_date. The current Bronze
 filter excludes them. They never reach Silver and are absent from the clinical report.
@@ -219,7 +219,7 @@ Does this framing match yours?
 You confirm. The skill produces the spec:
 
 ```
-SPEC — CD-200
+SPEC — DI-200
 
 REQUIREMENTS
   R1  The fix handles null encounter_date records without silently dropping them.
@@ -235,7 +235,7 @@ ACCEPTANCE CRITERIA
   AC3  The pipeline log for this run shows "22 records quarantined: null
        encounter_date." Pass: string present in run log. Fail: absent or wrong count.
   AC4  Data Platform has reviewed and approved the design. Pass: approval comment
-       on CD-200 from Data Platform lead. Fail: no approval recorded.
+       on DI-200 from Data Platform lead. Fail: no approval recorded.
 
 SUCCESS METRICS
   SM1  Lakewood TAVR clinical report shows 500 patients for the 2026-05 period
@@ -248,13 +248,13 @@ SUCCESS METRICS
 ## Step 5: Design the fix
 
 ```
-/ah-arch CD-200
+/ah-arch DI-200
 ```
 
 The skill reads the spec and produces design options.
 
 ```
-DESIGN — CD-200
+DESIGN — DI-200
 
 OPTION A (recommended): Quarantine to bronze with quarantine_ind flag
   Add quarantine_ind column to bronze_lakewood.tavr and silver_std_tavr.
@@ -278,13 +278,13 @@ OPTION C: Pass through with no flag
   Remove the filter entirely. Null records pass to Silver as-is.
 
   WHY NOT: Downstream logic that depends on encounter_date for date range filtering
-  will produce unpredictable results on null values. The original filter (CD-157)
+  will produce unpredictable results on null values. The original filter (DI-157)
   existed for this reason. Rejected.
 
 CROSS TEAM REQUIREMENT
   Data Platform must approve Option A before /ah-dev starts.
   The quarantine_ind column addition affects silver_std_tavr, which Data Platform owns.
-  Flag: post the design to Data Platform on CD-200 and wait for sign off.
+  Flag: post the design to Data Platform on DI-200 and wait for sign off.
 
 ASSUMPTION
   Dipen confirms: quarantine_ind is the right column name (not filter_ind or exclude_ind).
@@ -298,13 +298,13 @@ You review the design, agree with Option A, and post it to Jira for Data Platfor
 ## Step 6: Implement
 
 ```
-/ah-dev CD-200
+/ah-dev DI-200
 ```
 
 The skill reads the approved design. The TEACHING gate fires:
 
 ```
-TEACHING GATE — CD-200
+TEACHING GATE — DI-200
 
 Walk me through the approach before I write any code. Two sentences:
 what are we changing and why does this approach satisfy the acceptance criteria?
@@ -316,8 +316,8 @@ You explain. The skill produces the implementation:
 # tavr_bronze.py
 # Author: [YOUR NAME]
 # Date: 2026-06-03
-# Scope: Add quarantine_ind for null encounter_date records (CD-200)
-# Ticket: CD-200
+# Scope: Add quarantine_ind for null encounter_date records (DI-200)
+# Ticket: DI-200
 # ChangeLog: 2026-06-03 — added quarantine_ind column per Data Platform approval
 
 from pyspark.sql import DataFrame
@@ -363,13 +363,13 @@ def build_silver_tavr(df: DataFrame) -> DataFrame:
 ## Step 7: QA review
 
 ```
-/ah-qa CD-200
+/ah-qa DI-200
 ```
 
 The adversary reads the spec, design, and implementation. It produces findings:
 
 ```
-QA FINDINGS — CD-200
+QA FINDINGS — DI-200
 
 CRITICAL (must fix before merge)
   None.
@@ -395,7 +395,7 @@ LOW
 
 APPROVED WITH CONDITIONS
   Merge after High finding is resolved. Medium finding can be addressed in a
-  follow on ticket (CD-201) if Data Platform agrees it is out of scope for CD-200.
+  follow on ticket (DI-201) if Data Platform agrees it is out of scope for DI-200.
 ```
 
 You review the findings. The High finding is valid. You route it back to `/ah-dev` for the fix. The fix is applied. QA runs the review again and approves.
@@ -405,7 +405,7 @@ You review the findings. The High finding is valid. You route it back to `/ah-de
 ## Step 8: Draft the Jira resolution comment
 
 ```
-/draft jira CD-200
+/draft jira DI-200
 ```
 
 ```
@@ -415,7 +415,7 @@ STAKES: Medium
 
 ---
 Resolved. Root cause: 22 Lakewood TAVR records had null encounter_date in the
-2026-05-20 source file. The Bronze filter (added CD-157) excluded them before
+2026-05-20 source file. The Bronze filter (added DI-157) excluded them before
 Silver. They never reached the clinical report.
 
 Fix: added quarantine_ind column to bronze_lakewood.tavr and silver_std_tavr.
@@ -462,10 +462,10 @@ of which records are affected and I can send it over.
 ```
 
 ```
-SESSION LOG — 2026-06-03 — CD-200
+SESSION LOG — 2026-06-03 — DI-200
 
 Done
-  - Oriented on CD-200 (Lakewood TAVR missing patients)
+  - Oriented on DI-200 (Lakewood TAVR missing patients)
   - Traced root cause: null encounter_date filtered at Bronze
   - Designed, implemented, and QA reviewed quarantine_ind fix
   - Data Platform approval obtained
@@ -475,14 +475,14 @@ Done
 Decided
   - Option A (quarantine flag) over coalesce and pass-through.
     Wrong data is worse than flagged data.
-  - Medium QA finding (full batch alert) deferred to CD-201.
+  - Medium QA finding (full batch alert) deferred to DI-201.
 
 Pending
   - You post Jira comment and client Slack message
   - Lakewood to resubmit 22 corrected records
-  - CD-201 to be created for full batch quarantine alert
+  - DI-201 to be created for full batch quarantine alert
 
-State file updated: CD-200-state.md — Status: QA APPROVED
+State file updated: DI-200-state.md — Status: QA APPROVED
 
 Memory candidate:
   [feedback] quarantine_ind is the standard column name for null-excluded records

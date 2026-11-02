@@ -609,7 +609,7 @@ echo $CLAUDE_DOTFILES <span class="cm"># → ~/Developer/dipen/ah-dotfiles</span
       <!-- WALKTHROUGH -->
       <section id="walkthrough">
         <h2>Walkthrough: A Bug Ticket</h2>
-        <p>A client reports 22 patients are missing from the monthly TAVR clinical report. The submission was two weeks ago. You open Jira and find ticket <code>CD-200</code>. Here is how the chain works on a real ticket.</p>
+        <p>A client reports 22 patients are missing from the monthly TAVR clinical report. The submission was two weeks ago. You open Jira and find ticket <code>DI-200</code>. Here is how the chain works on a real ticket.</p>
 
         <div class="callout">
           <div class="callout-title">Fictional data</div>
@@ -619,22 +619,22 @@ echo $CLAUDE_DOTFILES <span class="cm"># → ~/Developer/dipen/ah-dotfiles</span
         <div class="timeline">
           <div class="tl-item">
             <div class="tl-cmd">/start</div>
-            <div class="tl-text">Jira syncs. You see 3 open tickets, vault health for 12 state files, and one stale state file. CD-200 is flagged high priority. You start there.</div>
+            <div class="tl-text">Jira syncs. You see 3 open tickets, vault health for 12 state files, and one stale state file. DI-200 is flagged high priority. You start there.</div>
           </div>
           <div class="tl-item">
-            <div class="tl-cmd">/ah-ticket CD-200</div>
+            <div class="tl-cmd">/ah-ticket DI-200</div>
             <div class="tl-text">The skill reads Jira, pulls the Lakewood Health client file from the vault's system map, and produces an ORIENT block: what is confirmed (500 records submitted, 478 in clinical report, pipeline ran without error), what is unknown (where the 22 dropped), and what is assumed. The explain-back gate fires — you state your read of the ticket in two sentences before the skill accepts the classification and routes to <code>/ah-support</code>.</div>
           </div>
           <div class="tl-item">
-            <div class="tl-cmd">/ah-support CD-200</div>
+            <div class="tl-cmd">/ah-support DI-200</div>
             <div class="tl-text">The diagnostician traces Raw → Bronze → Silver. Raw: 500 rows confirmed. Bronze: 478 rows. Gap appears at Bronze. A null check on Raw reveals 22 records where <code>encounter_date IS NULL</code>. The Bronze transform filters them at line 47: <code>df.filter(col("encounter_date").isNotNull())</code>. Root cause confirmed. The handoff package names three fix options and flags that the filter was added by a prior Data Platform decision — any change requires their review.</div>
           </div>
           <div class="tl-item">
-            <div class="tl-cmd">/ah-spec CD-200</div>
+            <div class="tl-cmd">/ah-spec DI-200</div>
             <div class="tl-text">The spec skill reads the support handoff — not Jira — and restates the problem before writing a single requirement. Four requirements, four acceptance criteria with pass/fail conditions, two success metrics. AC1: zero records dropped silently at Bronze. AC2: a <code>quarantine_ind</code> column exists on Bronze with value 1 for null records. Pass condition is explicit.</div>
           </div>
           <div class="tl-item">
-            <div class="tl-cmd">/ah-arch CD-200</div>
+            <div class="tl-cmd">/ah-arch DI-200</div>
             <div class="tl-text">Three design options. Option A recommended: add <code>quarantine_ind = 1</code> to Bronze records with null <code>encounter_date</code>, exclude them at Silver, alert client to resubmit. Option B (coalesce to <code>load_date</code>) rejected — a synthetic date is wrong data, and wrong data is worse than flagged data. Option C (pass through naked) rejected — downstream date range logic produces unpredictable results on nulls. The original filter existed for this reason.</div>
           </div>
           <div class="tl-item gate-item">
@@ -643,11 +643,11 @@ echo $CLAUDE_DOTFILES <span class="cm"># → ~/Developer/dipen/ah-dotfiles</span
             <div class="tl-badge">Gate cleared</div>
           </div>
           <div class="tl-item">
-            <div class="tl-cmd">/ah-dev CD-200</div>
+            <div class="tl-cmd">/ah-dev DI-200</div>
             <div class="tl-text">The TEACHING gate fires — you explain the approach before code is written. The skill produces the Bronze and Silver changes: typed functions, named constants (<code>NULL_ENCOUNTER_DATE_FLAG: int = 1</code>), file header with ticket reference, logging via the proper framework, no magic numbers.</div>
           </div>
           <div class="tl-item">
-            <div class="tl-cmd">/ah-qa CD-200</div>
+            <div class="tl-cmd">/ah-qa DI-200</div>
             <div class="tl-text">The adversary reads spec, design, and implementation. One HIGH finding: the Silver filter uses <code>== 0</code> comparison on the integer flag without an explicit cast — if <code>quarantine_ind</code> is coerced to string anywhere in the pipeline, the filter fails silently and all records are excluded. One MEDIUM: no alert when the entire batch is quarantined. Both valid. HIGH routed back to <code>/ah-dev</code>. MEDIUM deferred to a follow-on ticket by mutual agreement.</div>
           </div>
           <div class="tl-item gate-item">

@@ -6,6 +6,7 @@ Scope: approval gate for Databricks CLI commands that return or copy row data
 Ticket: none (Arbiter is not Jira tracked)
 ChangeLog:
   2026-09-23  Created.
+  2026-11-01  Added gated paths for Python connector, SDK, Spark and REST calls; ungated list.
 
 Trigger: PreToolUse — Bash
 Action: if the command runs a Databricks operation that returns row data (SQL statements,
@@ -20,6 +21,26 @@ Action: if the command runs a Databricks operation that returns row data (SQL st
 Why deny first: in VS Code no hook output is visible to the user before the approval click.
 Fails closed: any internal error on a databricks command returns "ask", never silent allow.
 Commands with no databricks invocation exit 0 with no output (normal permission flow).
+
+Gated, same deny-then-approve flow (approval code = hash of the whole command text with the
+ARBITER_DATA_APPROVED marker removed):
+  - Databricks CLI groups listed in ROW_DATA_OPS and `databricks api` on /sql/statements
+  - Python run inline or by heredoc (python, python3, ipython, uv, pyspark, spark-submit) whose text uses
+    databricks.sql / databricks_sql (SQL connector), SDK row calls (statement_execution, execute_statement,
+    get_run_output, files.download, dbfs, genie), or Spark reads (spark.sql, spark.table, spark.read,
+    DatabricksSession, databricks.connect)
+  - dbsqlcli
+  - curl, wget or http against a workspace host (azuredatabricks.net, cloud/gcp.databricks.com, the value of
+    DATABRICKS_HOST, $DATABRICKS_HOST) or against /api/2.x/sql
+UNGATED PATHS (this hook cannot see them; docs state the limit):
+  - Python or other scripts run from a file: `python job.py` is judged by command text only, not file contents
+  - Notebooks and jobs run inside Databricks (`databricks bundle run`, `jobs run-now`) and their outputs
+  - MCP tools, IDE extensions, notebooks opened in a browser, JDBC/ODBC/BI clients, dbt
+  - Obfuscated or computed commands: base64, eval of built strings, variables expanded later, aliases
+  - Hosts reached through a proxy or a custom domain not matching the host patterns and not in DATABRICKS_HOST
+  - Other languages (node, java, R) calling the REST API through a library
+  - Row data read after the fact from files already on disk
+Heuristic text match: false positives (a gated word inside an unrelated command) fail safe to a prompt.
 """
 
 from __future__ import annotations
@@ -52,6 +73,25 @@ ROW_DATA_OPS = [
     ("workspace", lambda sub: sub in {"export", "export-dir"}, "Notebook export (outputs may contain data)"),
     ("query-history", lambda sub: sub == "list", "Query history (query text may contain values)"),
 ]
+
+PYTHON_INTERPRETERS = re.compile(r"^(python[\d.]*|ipython[\d.]*|uv|uvx|pyspark|spark-submit|dbsqlcli)$")
+HTTP_CLIENTS = {"curl", "wget", "http", "https", "xh"}
+PYTHON_MARKERS = [
+    (re.compile(r"databricks\.sql\b|from\s+databricks\s+import\s+sql|databricks_sql|\bdbsqlcli\b"),
+     "Databricks SQL connector (runs SQL)"),
+    (re.compile(r"statement_execution|execute_statement|get_run_output|files\.download|dbfs\.(read|download)|"
+                r"\.genie\.|query_history"), "Databricks SDK call (may return row data)"),
+    (re.compile(r"\bspark\.(sql|table|read)\b|DatabricksSession|databricks\.connect"),
+     "Spark session query (runs SQL or reads tables)"),
+]
+HOST_PATTERN = r"[\w.-]+\.azuredatabricks\.net|[\w.-]+\.(?:cloud|gcp)\.databricks\.com|\$\{?DATABRICKS_HOST\}?"
+SQL_API_PATTERN = re.compile(r"/api/2\.\d/sql\b")
+URL_PATTERN = re.compile(r"""https?://[^\s'"]+""")
+SQL_TEXT_PATTERN = re.compile(
+    r"""(?:\.execute|spark\.sql|\.sql|statement\s*=)\s*\(?\s*[fr]?(\"\"\"|'''|"|')(.*?)\1""", re.S)
+TRIGGER_WORDS = ("databricks", "spark", "WorkspaceClient", "/api/2.", "dbsqlcli", "DATABRICKS_HOST",
+                 "statement_execution", "execute_statement", "get_run_output", "files.download", "dbfs",
+                 ".genie.", "query_history", "DatabricksSession")
 
 
 def decide(decision: str, reason: str) -> None:
@@ -158,6 +198,36 @@ def classify(args: list[str]) -> tuple[str, list[str], str]:
     return "", [], ""
 
 
+def host_pattern() -> re.Pattern:
+    extra = os.environ.get("DATABRICKS_HOST", "").replace("https://", "").replace("http://", "").strip("/")
+    pattern = HOST_PATTERN + (("|" + re.escape(extra)) if extra else "")
+    return re.compile(pattern)
+
+
+def strip_marker(command: str) -> str:
+    return APPROVAL_MARKER.sub("", command).strip()
+
+
+def first_sql(command: str) -> str:
+    match = SQL_TEXT_PATTERN.search(command)
+    return match.group(2) if match else ""
+
+
+def classify_other(command: str) -> tuple[str, list[str], str]:
+    """Non-CLI row-data paths: Python/SDK/Spark text and HTTP clients. ("", [], "") if none."""
+    names = {os.path.basename(t) for t in shell_tokens(command)}
+    if names & HTTP_CLIENTS and (host_pattern().search(command) or SQL_API_PATTERN.search(command)):
+        url = URL_PATTERN.search(command)
+        return ("Direct REST call to a Databricks workspace",
+                [f"  Endpoint: {url.group(0) if url else 'see command'}"], first_sql(command))
+    if any(PYTHON_INTERPRETERS.match(n) for n in names):
+        for pattern, label in PYTHON_MARKERS:
+            hit = pattern.search(command)
+            if hit:
+                return label, [f"  Matched:  {hit.group(0)}"], first_sql(command)
+    return "", [], ""
+
+
 def build_reason(label: str, facts: list[str], sql: str, description: str) -> str:
     from sql_summary import format_sql_summary, summarize_sql
     lines = [f"Databricks data access needs approval: {label}", "", "Data requested (parsed from the command):"]
@@ -171,6 +241,16 @@ def build_reason(label: str, facts: list[str], sql: str, description: str) -> st
     return "\n".join(lines)
 
 
+def gate_other(command: str, approved: set[str], description: str) -> None:
+    label, facts, sql = classify_other(command)
+    if not label:
+        return
+    code = approval_code(["raw", strip_marker(command)])
+    if code in approved:
+        ask(f"Databricks data access approved in chat (code {code}). Confirm to run.")
+    deny_with_summary(build_reason(label, facts, sql, description), code)
+
+
 def main() -> None:
     try:
         payload = json.loads(sys.stdin.read())
@@ -178,7 +258,7 @@ def main() -> None:
         sys.exit(0)
     tool_input = payload.get("tool_input") or {}
     command = str(tool_input.get("command", ""))
-    if "databricks" not in command:
+    if not any(word in command for word in TRIGGER_WORDS):
         sys.exit(0)
     try:
         approved = approved_codes(command)
@@ -190,6 +270,7 @@ def main() -> None:
             if code in approved:
                 ask(f"Databricks data access approved in chat (code {code}). Confirm to run.")
             deny_with_summary(build_reason(label, facts, sql, str(tool_input.get("description", ""))), code)
+        gate_other(command, approved, str(tool_input.get("description", "")))
     except SystemExit:
         raise
     except Exception as exc:

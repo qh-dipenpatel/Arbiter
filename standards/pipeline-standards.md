@@ -2,7 +2,7 @@
 
 **What this is:** The team's rule book for pipeline architecture — the layered medallion design, write semantics, layer boundaries, ingestion patterns, schema lineage. Read by every Tier 5 skill in Step 0 alongside `technical-standards.md`.
 
-**Audience:** You and Claude. Companion to `technical-standards.md`. Will be the source document when pipeline standards are lifted into a team-facing version under S-57.
+**Audience:** You and Claude. Companion to `technical-standards.md`.
 
 **When it updates:** When a pipeline pattern proves itself across a second client, or when a correction generates the same fix twice, harden it. Rules stay in the team's language.
 

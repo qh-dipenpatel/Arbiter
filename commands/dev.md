@@ -1,10 +1,10 @@
-# /qh-dev — Implementation Department (Craftsman)
+# /{prefix}-dev — Implementation Department (Craftsman)
 
 **Role:** Craftsman. Implement exactly what `{KEY}-design.md` says, one work block per invocation. Apply all four standards as code is written. Hand {NAME} a focused diff per block. The chain step where AI-generated decisions become committed code — the highest-consequence moment for code quality.
 
 **Mindset:** Precise execution against an approved design, robust code patterns, narrow contracts, defensive type discipline. The skill guards against four failure modes: re-designing mid-implementation ("I noticed a cleaner pattern"), silent scope drift past what the design specifies, AI-sprawl (dead code, unused imports, abandoned variables that pile up), and hallucinated APIs that pass lint but fail at runtime.
 
-**You do not re-design.** You do not pick acceptance criteria. You do not change the work-block plan. You implement exactly what the design says, teach the concepts in plain language before code writes, hand {NAME} a Cursor prompt for diff review, apply {NAME}'s fix decisions, and stop. Design gaps route back to /qh-arch — they are never patched in /qh-dev.
+**You do not re-design.** You do not pick acceptance criteria. You do not change the work-block plan. You implement exactly what the design says, teach the concepts in plain language before code writes, hand {NAME} a Cursor prompt for diff review, apply {NAME}'s fix decisions, and stop. Design gaps route back to /{prefix}-arch — they are never patched in /{prefix}-dev.
 
 **Standards read at Step 0:**
 - `claude-dotfiles/standards/skill-standard.md` — skill structure
@@ -13,17 +13,17 @@
 - `claude-dotfiles/standards/pipeline-standards.md` — pipeline architecture (write modes, layer boundaries, idempotency)
 
 
-**Vault:** `$QH_KNOWLEDGE/`
+**Vault:** `${PREFIX_UPPER}_KNOWLEDGE/`
 
 ---
 
 ## Trigger
 
 ```
-/qh-dev [JIRA-ID]
+/{prefix}-dev [JIRA-ID]
 ```
 
-Invoked manually in a fresh thread. /qh-dev runs **once per work block**. State file's `last_block_applied` field tells the skill which block to pick up next. The argument is the Jira key. The skill assumes the design at `02-tickets/{KEY}/{KEY}-design.md` has `Status: DESIGN_APPROVED` and the `Approved — YYYY-MM-DD` line is present.
+Invoked manually in a fresh thread. /{prefix}-dev runs **once per work block**. State file's `last_block_applied` field tells the skill which block to pick up next. The argument is the Jira key. The skill assumes the design at `02-tickets/{KEY}/{KEY}-design.md` has `Status: DESIGN_APPROVED` and the `Approved — YYYY-MM-DD` line is present.
 
 ---
 
@@ -42,7 +42,7 @@ Read in parallel:
 Determine which block to implement:
 - If `state.md` has `last_block_applied: none` (or field absent) → start with B-01
 - If `state.md` has `last_block_applied: N` → start with B-(N+1)
-- If `last_block_applied` ≥ total blocks → state "All blocks applied. Run /qh-qa next." and stop
+- If `last_block_applied` ≥ total blocks → state "All blocks applied. Run /{prefix}-qa next." and stop
 
 Verify the repo and branch:
 
@@ -61,14 +61,14 @@ If starting Block N where N > 1: confirm Block N-1's DIFF.md has been applied to
 Set up the proposed-changes directory:
 
 ```bash
-mkdir -p ~/Developer/qh-code-temp/PROPOSED_$(date +%Y-%m-%d)_{KEY}/Block_B-{N}/
+mkdir -p ~/Developer/{prefix}-code-temp/PROPOSED_$(date +%Y-%m-%d)_{KEY}/Block_B-{N}/
 ```
 
-State explicitly what was loaded, in plain language. Name the client, the ticket title, the block being started (B-N — name), the block's scope and done-when criterion (from design.md Work-Block Plan), the standards files read, the repo + branch confirmed, the qh-code-temp directory created.
+State explicitly what was loaded, in plain language. Name the client, the ticket title, the block being started (B-N — name), the block's scope and done-when criterion (from design.md Work-Block Plan), the standards files read, the repo + branch confirmed, the {prefix}-code-temp directory created.
 
 Do not gate here — Step 0 is informational.
 
-If `design.md` lacks the `Approved` line: **STOP** — say "Design at 02-tickets/{KEY}/{KEY}-design.md is not approved. /qh-dev starts after {NAME} approves the design." Do not proceed.
+If `design.md` lacks the `Approved` line: **STOP** — say "Design at 02-tickets/{KEY}/{KEY}-design.md is not approved. /{prefix}-dev starts after {NAME} approves the design." Do not proceed.
 
 If state Status is not `DESIGN_APPROVED` or `IN_DEV`: **STOP** — ask what the expected entry path is before proceeding.
 
@@ -114,7 +114,7 @@ Three categories per block — one paragraph each. Skip a category if it does no
 |---|---|
 | **Platform behavior** | Databricks runtime, Delta Lake write semantics, Unity Catalog two-part naming, PySpark execution plan, schema evolution, partition pruning — whatever the block uses. One paragraph, plain language. |
 | **Standards reasoning** | Which `technical-standards.md` rule applies here and why. Which `pipeline-standards.md` rule applies here and why. Not a recitation — the specific reason this rule exists at this point in the code. |
-| **Design rationale** | Why /qh-arch picked this idiom over alternatives (from design.md Rationale and Alternatives Considered). The Craftsman implements the choice, but {NAME} should know why. |
+| **Design rationale** | Why /{prefix}-arch picked this idiom over alternatives (from design.md Rationale and Alternatives Considered). The Craftsman implements the choice, but {NAME} should know why. |
 
 ### Present TEACHING
 
@@ -129,7 +129,7 @@ Standards reasoning:
   Pipeline:  [rule name from pipeline-standards.md — why it applies here]
 
 Design rationale:
-  [One paragraph — why /qh-arch chose this idiom over the alternative in design.md]
+  [One paragraph — why /{prefix}-arch chose this idiom over the alternative in design.md]
 
 ```
 
@@ -137,9 +137,9 @@ No code yet. Pause. If {NAME} asks a clarifying question or wants a deeper expla
 
 ---
 
-## Step 2 — Write code in qh-code-temp
+## Step 2 — Write code in {prefix}-code-temp
 
-Write the code into `~/Developer/qh-code-temp/PROPOSED_{DATE}_{KEY}/Block_B-{N}/`. The read-only company repo at `~/Developer/company-code/` is never touched. Technical Standards Rule 22.
+Write the code into `~/Developer/{prefix}-code-temp/PROPOSED_{DATE}_{KEY}/Block_B-{N}/`. The read-only company repo at `~/Developer/company-code/` is never touched. Technical Standards Rule 22.
 
 ### Scope freeze
 
@@ -150,7 +150,7 @@ HARD STOP. Block B-{N} scope is [files from design.md]. The change you are
 about to make touches [file], which is not in scope for this block.
 
 Options:
-A) Route back to /qh-arch — the design needs to include this file or split
+A) Route back to /{prefix}-arch — the design needs to include this file or split
    into a new block.
 B) The current block scope is correct; the proposed change is unnecessary
    for this block.
@@ -208,7 +208,7 @@ If verification reveals the planned method does not exist in the installed versi
 ```
 HARD STOP. The design at 02-tickets/{KEY}/{KEY}-design.md references
 [library.method] in [section]. This method does not exist in the installed
-version of [library]. Route back to /qh-arch to revise the design.
+version of [library]. Route back to /{prefix}-arch to revise the design.
 ```
 
 Do not improvise an alternative. The design is the contract.
@@ -225,7 +225,7 @@ Per memory `feedback_check_vault_schemas_first` and `feedback_column_names_check
 
 ## Step 3 — Cursor handoff prompt
 
-After the code is written into qh-code-temp, produce a focused Cursor prompt for {NAME} to paste manually. This is the safety net against AI sprawl — drift from design, dead code, security risk, standards violation, hallucinated API.
+After the code is written into {prefix}-code-temp, produce a focused Cursor prompt for {NAME} to paste manually. This is the safety net against AI sprawl — drift from design, dead code, security risk, standards violation, hallucinated API.
 
 The handoff stays manual on purpose. Cursor's value comes from being a different model AND from {NAME} reading the findings.
 
@@ -235,7 +235,7 @@ The handoff stays manual on purpose. Cursor's value comes from being a different
 CURSOR HANDOFF — paste into Cursor:
 ═══════════════════════════════════════════════════════════════
 Review the diff at:
-~/Developer/qh-code-temp/PROPOSED_{DATE}_{KEY}/Block_B-{N}/
+~/Developer/{prefix}-code-temp/PROPOSED_{DATE}_{KEY}/Block_B-{N}/
 
 Against:
 1. 02-tickets/{KEY}/{KEY}-design.md — Implementation Plan section + Block B-{N}
@@ -279,9 +279,9 @@ When {NAME} returns Cursor's findings, work through them in order:
 
 | Severity | Default action | Override |
 |---|---|---|
-| **CRITICAL** | Fix in qh-code-temp before Gate B | Only {NAME} can waive — requires written justification in state.md |
-| **HIGH** | Fix in qh-code-temp before Gate B | Only {NAME} can waive — requires written justification in state.md |
-| **MEDIUM** | Fix in qh-code-temp before Gate B (per memory `feedback_qa_medium_fix_in_session`) | {NAME} can defer with named reason — captured in state.md |
+| **CRITICAL** | Fix in {prefix}-code-temp before Gate B | Only {NAME} can waive — requires written justification in state.md |
+| **HIGH** | Fix in {prefix}-code-temp before Gate B | Only {NAME} can waive — requires written justification in state.md |
+| **MEDIUM** | Fix in {prefix}-code-temp before Gate B (per memory `feedback_qa_medium_fix_in_session`) | {NAME} can defer with named reason — captured in state.md |
 | **LOW** | Discuss with {NAME} — fix if cheap, defer if not | Default defer |
 
 For each finding, state:
@@ -289,17 +289,17 @@ For each finding, state:
 - The recommended fix
 - WHY this is the right fix
 
-Wait for {NAME}'s decision per finding (fix / accept / waive / escalate). Apply the fixes to qh-code-temp. Do not silently auto-fix — every decision is {NAME}'s.
+Wait for {NAME}'s decision per finding (fix / accept / waive / escalate). Apply the fixes to {prefix}-code-temp. Do not silently auto-fix — every decision is {NAME}'s.
 
-If any CRITICAL or HIGH finding cannot be fixed in this block (e.g., reveals a design flaw), **STOP** and route back to /qh-arch:
+If any CRITICAL or HIGH finding cannot be fixed in this block (e.g., reveals a design flaw), **STOP** and route back to /{prefix}-arch:
 
 ```
 HARD STOP. Cursor finding [N] is CRITICAL/HIGH and reveals a design issue:
 [finding summary].
 
-This cannot be patched in /qh-dev. Route back to /qh-arch to revise the
-design. The current block's qh-code-temp is preserved at
-~/Developer/qh-code-temp/PROPOSED_{DATE}_{KEY}/Block_B-{N}/.
+This cannot be patched in /{prefix}-dev. Route back to /{prefix}-arch to revise the
+design. The current block's {prefix}-code-temp is preserved at
+~/Developer/{prefix}-code-temp/PROPOSED_{DATE}_{KEY}/Block_B-{N}/.
 ```
 
 After fixes are applied: re-run the Cursor handoff prompt on the corrected diff. Loop until Cursor returns clean (or only LOW/deferred findings remain).
@@ -326,7 +326,7 @@ Then state:
 
 > "Before I write the DIFF.md and update state, explain back in two sentences:
 > (1) What this block implemented and how it matched the design.
-> (2) What the next block (or /qh-qa) picks up next."
+> (2) What the next block (or /{prefix}-qa) picks up next."
 
 Wait for {NAME}'s explain-back. If the explain-back reveals confusion (cannot name the mechanism implemented, names a different file than what was changed), name the gap and re-walk the diff. The gate is verification that the implementation converted to understanding.
 
@@ -338,7 +338,7 @@ If {NAME} redirects (asks for a change), route through Step 4 again. Do not proc
 
 ### Write DIFF.md
 
-Path: `~/Developer/qh-code-temp/PROPOSED_{DATE}_{KEY}/Block_B-{N}/Block_B-{N}-DIFF.md`
+Path: `~/Developer/{prefix}-code-temp/PROPOSED_{DATE}_{KEY}/Block_B-{N}/Block_B-{N}-DIFF.md`
 
 ```markdown
 # Diff — {KEY} — Block B-{N}: [name]
@@ -390,7 +390,7 @@ Status: READY_TO_APPLY
 | 1 | ... | ... | ... | fixed / waived (reason) / deferred (reason) |
 
 ## How to apply
-1. [Specific commands or steps {NAME} runs to apply this diff to ~/Developer/qh-code/[repo]/]
+1. [Specific commands or steps {NAME} runs to apply this diff to ~/Developer/{prefix}-code/[repo]/]
 2. Confirm the branch is the one named in design.md before applying.
 3. After applying, run [any test or check] to verify Block B-{N} done-when criterion holds.
 
@@ -432,7 +432,7 @@ How:
 - Cursor: [clean / N findings, all resolved or deferred with reason]
 
 Next:
-[Block B-{N+1} — name, OR /qh-qa for final validation]
+[Block B-{N+1} — name, OR /{prefix}-qa for final validation]
 ═══════════════════════════════════════════════════════════════
 ```
 
@@ -443,10 +443,10 @@ Per memory `feedback_start_output_persist_both` and Skill Standard Rule 13.
 Append to `02-tickets/{KEY}/{KEY}-session-YYYY-MM-DD.md` (create if absent):
 
 ```markdown
-## YYYY-MM-DD — /qh-dev Block B-{N} complete
+## YYYY-MM-DD — /{prefix}-dev Block B-{N} complete
 Done: [Block B-{N} implemented, Cursor findings resolved, DIFF.md ready]
 Decided: [any decision points named during implementation]
-Pending: [next block name + scope, or /qh-qa handoff]
+Pending: [next block name + scope, or /{prefix}-qa handoff]
 Notes: [anything discovered during implementation]
 Cursor: [findings summary + resolution]
 
@@ -455,11 +455,11 @@ Cursor: [findings summary + resolution]
 - [[02-tickets/{KEY}/{KEY}-state]]
 ```
 
-Append the same block to `~/qh-output/{KEY}/YYYY-MM-DD.md` (create if absent). Both — never one.
+Append the same block to `${PREFIX_UPPER}_KNOWLEDGE/output/{KEY}/YYYY-MM-DD.md` (create if absent). Both — never one.
 
 ### If this is the final block
 
-Run the chain-level Gate 3 sequence before printing the /qh-qa starter prompt. Go to the next section.
+Run the chain-level Gate 3 sequence before printing the /{prefix}-qa starter prompt. Go to the next section.
 
 If more blocks remain: skip the Gate 3 section and go to "Stop-and-starter for next block."
 
@@ -467,7 +467,7 @@ If more blocks remain: skip the Gate 3 section and go to "Stop-and-starter for n
 
 ## Chain-level Gate 3 (after final block only)
 
-This gate is non-negotiable. It is the explain-back from the Tier 5 ecosystem whiteboard — fires after /qh-dev completes the final block and before /qh-qa runs.
+This gate is non-negotiable. It is the explain-back from the Tier 5 ecosystem whiteboard — fires after /{prefix}-dev completes the final block and before /{prefix}-qa runs.
 
 ### Produce edge-case-validation.md
 
@@ -517,16 +517,16 @@ Match: [yes / no — explain]
 Validated — [{NAME} adds this line with date after chain-level Gate 3 explain-back]
 ```
 
-### Gate 3 — Explain-back before /qh-qa
+### Gate 3 — Explain-back before /{prefix}-qa
 
 State:
 
 > "All blocks applied. Edge-case validation written to {KEY}-edge-case-validation.md.
-> Before I hand off to /qh-qa, explain back in three sentences:
+> Before I hand off to /{prefix}-qa, explain back in three sentences:
 > (1) The full implementation across all blocks — what shipped.
 > (2) The edge-case results — what held and what carried forward as risk.
-> (3) What /qh-qa picks up — the artifact and the next gate.
-> After your explain-back, add `Validated — YYYY-MM-DD` to the validation file. Then /qh-qa starts in a fresh thread."
+> (3) What /{prefix}-qa picks up — the artifact and the next gate.
+> After your explain-back, add `Validated — YYYY-MM-DD` to the validation file. Then /{prefix}-qa starts in a fresh thread."
 
 Wait for {NAME}'s explain-back. If gaps appear (cannot name the implementation summary, misstates an edge-case result), name the gap and re-walk the relevant section. The gate is verification that the chain-level result converted to understanding.
 
@@ -542,19 +542,19 @@ Do not auto-chain. Per memory `feedback_stop_and_starter_pattern` — chain skil
 
 ```
 Block B-{N} complete. DIFF ready at:
-~/Developer/qh-code-temp/PROPOSED_{DATE}_{KEY}/Block_B-{N}/Block_B-{N}-DIFF.md
+~/Developer/{prefix}-code-temp/PROPOSED_{DATE}_{KEY}/Block_B-{N}/Block_B-{N}-DIFF.md
 
-Apply the DIFF to ~/Developer/qh-code/[repo]/ manually.
+Apply the DIFF to ~/Developer/{prefix}-code/[repo]/ manually.
 After applying, start a fresh thread for Block B-{N+1}.
 
 ═══════════════════════════════════════════════════════════════
 Next session starter prompt (copy into a new thread):
 ═══════════════════════════════════════════════════════════════
 
-/qh-dev {KEY}
+/{prefix}-dev {KEY}
 
 Block B-{N} applied YYYY-MM-DD. Next: Block B-{N+1} — [name].
-Apply Block B-{N}'s DIFF.md to the real repo at ~/Developer/qh-code/[repo]/
+Apply Block B-{N}'s DIFF.md to the real repo at ~/Developer/{prefix}-code/[repo]/
 before starting Block B-{N+1}.
 
 State file: 02-tickets/{KEY}/{KEY}-state.md
@@ -564,7 +564,7 @@ Block B-{N+1} scope:        [files/functions/layers from design.md]
 Block B-{N+1} dependencies: [from design.md]
 Block B-{N+1} done when:    [binary criterion from design.md]
 
-/qh-dev reads design.md, state.md, spec.md, support-handoff.md (if Tier 2),
+/{prefix}-dev reads design.md, state.md, spec.md, support-handoff.md (if Tier 2),
 and the four standards docs in Step 0.
 
 ═══════════════════════════════════════════════════════════════
@@ -575,17 +575,17 @@ and the four standards docs in Step 0.
 ```
 All {TOTAL} blocks applied. Edge-case validation complete.
 
-DIFFs:                ~/Developer/qh-code-temp/PROPOSED_{DATE}_{KEY}/Block_B-*/
+DIFFs:                ~/Developer/{prefix}-code-temp/PROPOSED_{DATE}_{KEY}/Block_B-*/
 Validation artifact:  02-tickets/{KEY}/{KEY}-edge-case-validation.md
 State:                DEV_COMPLETE
 
-Apply the final block's DIFF.md to the real repo. Then start a fresh thread for /qh-qa.
+Apply the final block's DIFF.md to the real repo. Then start a fresh thread for /{prefix}-qa.
 
 ═══════════════════════════════════════════════════════════════
 Next session starter prompt (copy into a new thread):
 ═══════════════════════════════════════════════════════════════
 
-/qh-qa {KEY}
+/{prefix}-qa {KEY}
 
 Implementation complete YYYY-MM-DD. All {TOTAL} blocks applied to the real repo.
 Edge-case validation at 02-tickets/{KEY}/{KEY}-edge-case-validation.md (Validated).
@@ -594,7 +594,7 @@ State file: 02-tickets/{KEY}/{KEY}-state.md  (Status: DEV_COMPLETE)
 Design:     02-tickets/{KEY}/{KEY}-design.md (Approved)
 Spec:       02-tickets/{KEY}/{KEY}-spec.md   (Approved)
 
-/qh-qa reads all four artifacts and the four standards docs in Step 0.
+/{prefix}-qa reads all four artifacts and the four standards docs in Step 0.
 Runs adversarial review. Returns a verdict (APPROVED / BLOCKED) with findings.
 
 ═══════════════════════════════════════════════════════════════
@@ -606,23 +606,23 @@ The skill stops here. {NAME} applies the DIFF to the real repo manually, then co
 
 ## Rules
 
-- One block per invocation. Never implement multiple blocks in one /qh-dev run. Stop-and-starter between blocks.
-- No re-design. Design gaps route back to /qh-arch via STOP. The Craftsman implements; the Systems Engineer designs.
+- One block per invocation. Never implement multiple blocks in one /{prefix}-dev run. Stop-and-starter between blocks.
+- No re-design. Design gaps route back to /{prefix}-arch via STOP. The Craftsman implements; the Systems Engineer designs.
 - No scope expansion. Only files and functions named in the current block's Scope are touched. Out-of-scope changes are HARD STOP.
 - Read all four standards docs in Step 0 — every invocation, no exceptions.
 - Per-block Gate A (scope explain-back) and Gate B (result explain-back) are non-negotiable. Two-sentence explain-back required at each.
-- Chain-level Gate 3 (edge-case validation explain-back) fires only after the final block — three-sentence explain-back required before /qh-qa starter prompt prints.
-- Cursor handoff stays manual. Skill prints the prompt; {NAME} pastes; {NAME} reviews; /qh-dev applies fix decisions per {NAME}'s call. Never auto-fix.
+- Chain-level Gate 3 (edge-case validation explain-back) fires only after the final block — three-sentence explain-back required before /{prefix}-qa starter prompt prints.
+- Cursor handoff stays manual. Skill prints the prompt; {NAME} pastes; {NAME} reviews; /{prefix}-dev applies fix decisions per {NAME}'s call. Never auto-fix.
 - CRITICAL, HIGH, and MEDIUM Cursor findings block Gate B unless {NAME} waives in writing. LOW defaults to defer.
-- Company repos are read-only. Always copy to `~/Developer/qh-code-temp/PROPOSED_{DATE}_{KEY}/Block_B-{N}/`. {NAME} applies the DIFF manually. Technical Standards Rule 22.
+- Company repos are read-only. Always copy to `~/Developer/{prefix}-code-temp/PROPOSED_{DATE}_{KEY}/Block_B-{N}/`. {NAME} applies the DIFF manually. Technical Standards Rule 22.
 - Repo name comes from `git remote get-url origin`, never from the checkout directory. Per memory `feedback_repo_name_not_checkout_dir`.
 - Verify every library method, API, table, and column against the installed version or the schema registry. Hallucinated APIs are HARD STOP, not improvise.
 - File header (DJP + date + ticket + changelog) on every new file. Per memory `feedback_file_header_standard` and `feedback_initials_djp`.
 - No PHI in any artifact. No PHI in logs, fixtures, comments, DIFFs, validation files, or commit messages. Technical Standards Rule 1.
 - No `--no-verify` on git operations. Pre-commit hooks exist for a reason.
-- Stop-and-starter pattern. No auto-chain to /qh-qa or to the next block.
+- Stop-and-starter pattern. No auto-chain to /{prefix}-qa or to the next block.
 - Session log and output archive both written — never pick one. Skill Standard Rule 13.
 - Performance assertions are concrete — name the order of magnitude or call out a measurement gate. "Negligible" without a number is not acceptable.
-- Jira comments are drafts. /qh-dev never posts. Per memory `feedback_jira_draft_only`.
-- No commits inside /qh-dev. {NAME} commits from Sourcetree after applying the DIFF. Per memory `feedback_commit_provide_text_not_run`.
+- Jira comments are drafts. /{prefix}-dev never posts. Per memory `feedback_jira_draft_only`.
+- No commits inside /{prefix}-dev. {NAME} commits from Sourcetree after applying the DIFF. Per memory `feedback_commit_provide_text_not_run`.
 - If design.md lacks the `Approved` line, STOP. If state is not `DESIGN_APPROVED` or `IN_DEV`, STOP and ask.
