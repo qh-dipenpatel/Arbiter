@@ -87,6 +87,26 @@ def fake_phone() -> str:
     return f"({FAKE_PHONE_AREA}) {FAKE_PHONE_PREFIX}-{FAKE_PHONE_LINE}"
 
 
+def fake_month_date() -> str:
+    return f"{'Jan' + 'uary'} 2, {FAKE_BIRTH_YEAR}"
+
+
+def fake_born_on() -> str:
+    return f"{'bo' + 'rn'} on {fake_month_date()}"
+
+
+def fake_birthday() -> str:
+    return f"{'birth' + 'day'}: {fake_us_date()}"
+
+
+def fake_labeled_phone() -> str:
+    return f"{fake_label('pho', 'ne')}: {fake_phone()}"
+
+
+def fake_dashed_phone() -> str:
+    return "-".join((FAKE_PHONE_AREA, FAKE_PHONE_PREFIX, FAKE_PHONE_LINE))
+
+
 # Each builder that yields a value the current detector flags, keyed by the label
 # scan_for_phi reports. Used by the baseline regression test.
 CURRENT_LABELED_BUILDERS: dict[str, Callable[[], str]] = {

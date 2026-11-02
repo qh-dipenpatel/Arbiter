@@ -10,6 +10,10 @@ ChangeLog:
               Read file.content, MCP content arrays) plus a serialized fallback.
   2026-11-02  Added Level, Finding and scan_levels (deny, ask, warn). Every existing
               rule maps to deny, so scan_for_phi and scan_structured are unchanged.
+  2026-11-02  Added strong rules: month name and birth phrase dates (DOB), full street
+              address (ADDRESS, both deny) and phone numbers (PHONE ask when labeled,
+              PHONE_UNLABELED warn). Phone rules live in LEVELED_PATTERNS and are seen
+              only through scan_levels, so scan_for_phi never blocks on a phone number.
 
 Not a hook. Imported by hooks via sys.path from the hooks directory.
 """
@@ -26,6 +30,23 @@ from enum import Enum
 _SEP = r'["\']?\s*[:=#\s\-]\s*["\']?'
 _DATE = r'(?:\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}|\d{4}-\d{2}-\d{2})'
 
+# Bounded building blocks for the strong rules. Every repeat has an upper limit so a
+# long run of letters, digits or spaces cannot make matching slow.
+_MONTH = (r'(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?'
+          r'|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?')
+_MONTH_DATE = (r'(?:' + _MONTH + r'\s{1,3}\d{1,2}(?:st|nd|rd|th)?,?\s{1,3}\d{4}'
+               r'|\d{1,2}(?:st|nd|rd|th)?\s{1,3}(?:of\s{1,3})?' + _MONTH + r',?\s{1,3}\d{4})')
+_SEP_B = r'["\']?\s{0,3}[:=#\-]?\s{0,3}["\']?'
+_BIRTH_WORD = r'(?:DOB|date[\s_]?of[\s_]?birth|birth[\s_]?date|birthday|born)'
+_WORD = r'[A-Za-z0-9][A-Za-z0-9.\'\-]{0,19}'
+_STREET_SUFFIX = r'(?:Street|St|Avenue|Ave|Road|Rd|Lane|Ln|Drive|Dr|Boulevard|Blvd|Court|Ct|Way)'
+_ADDRESS = (r'(?<!\w)\d{1,5}\s{1,3}(?:' + _WORD + r'\s{1,3}){1,4}' + _STREET_SUFFIX
+            + r'\b\.?,?\s{1,3}(?:' + _WORD + r',?\s{1,3}){0,3}?' + _WORD
+            + r',?\s{1,3}(?-i:[A-Z]{2})\s{1,3}\d{5}(?:-\d{4})?(?!\d)')
+_PHONE_LABEL = r'(?<![A-Za-z])(?:phone|telephone|tel|cell|mobile|fax)(?:[\s_]?(?:number|num|no))?'
+_PHONE_LABELED = r'(?:\+?1[-.\s]{1,2})?(?:\([2-9]\d{2}\)\s{0,2}|[2-9]\d{2}[-.\s])\d{3}[-.\s]\d{4}(?![\d\-])'
+_PHONE_BARE = r'(?<![\d\-.])(?:\([2-9]\d{2}\)\s{0,2}|[2-9]\d{2}[-.])\d{3}[-.]\d{4}(?![\d\-.])'
+
 PHI_PATTERNS: list[tuple[str, str]] = [
     (r'(?<![A-Za-z])MRN\w*' + _SEP + r'\d{5,10}\b', 'MRN'),
     (r'\b(?:SSN|social[\s_]security(?:[\s_]number)?)[,:\s][^.\n\d]{0,25}\d{3}[-\s]\d{2}[-\s]\d{4}\b', 'SSN'),
@@ -33,6 +54,14 @@ PHI_PATTERNS: list[tuple[str, str]] = [
     (r'(?<![A-Za-z])(?:patient|member|pt)[\s_]?id' + _SEP + r'\d+\b', 'PATIENT_ID'),
     (r'\bNPI' + _SEP + r'\d{10}\b', 'NPI'),
     (r'\b(?:insurance[\s_]?id|policy[\s_]?number|subscriber[\s_]?id)' + _SEP + r'[A-Za-z0-9\-]{6,20}\b', 'INSURANCE_ID'),
+    (_BIRTH_WORD + r'(?:\s{1,3}(?:on|is))?' + _SEP_B + r'(?:' + _DATE + '|' + _MONTH_DATE + ')', 'DOB'),
+    (_ADDRESS, 'ADDRESS'),
+]
+
+# Rules seen only by scan_levels. Their levels are below deny, so scan_for_phi (which
+# the hooks treat as block) must never report them.
+LEVELED_PATTERNS: list[tuple[str, str]] = [
+    (_PHONE_LABEL + _SEP_B + _PHONE_LABELED, 'PHONE'),
 ]
 
 # Column names are normalized (lowercase, no _ - space) then substring matched.
@@ -51,6 +80,8 @@ HEADER_CELL = re.compile(r"[A-Za-z_][A-Za-z0-9_ ]{0,63}")
 COMPILED: list[tuple[re.Pattern[str], str]] = [
     (re.compile(pat, re.IGNORECASE), label) for pat, label in PHI_PATTERNS
 ]
+LABELED_PHONE_RULE = re.compile(LEVELED_PATTERNS[0][0], re.IGNORECASE)
+BARE_PHONE_RULE = re.compile(_PHONE_BARE)
 
 
 
@@ -66,7 +97,12 @@ class Level(str, Enum):
 LEVEL_RANK: dict[Level, int] = {Level.DENY: 0, Level.ASK: 1, Level.WARN: 2}
 
 # A label missing from this map is treated as DENY, so a new rule fails safe.
-LABEL_LEVELS: dict[str, Level] = {}
+LABEL_LEVELS: dict[str, Level] = {
+    "DOB": Level.DENY,
+    "ADDRESS": Level.DENY,
+    "PHONE": Level.ASK,
+    "PHONE_UNLABELED": Level.WARN,
+}
 DEFAULT_LEVEL = Level.DENY
 
 
@@ -91,6 +127,21 @@ def scan_for_phi(texts: list[str]) -> list[str]:
     return sorted(found)
 
 
+def scan_phone_labels(texts: list[str]) -> set[str]:
+    """
+    PHONE for a phone number next to a phone label. PHONE_UNLABELED for a separated
+    number with no label. A labeled number is blanked first so it is not counted twice.
+    """
+    found: set[str] = set()
+    for text in texts:
+        if LABELED_PHONE_RULE.search(text):
+            found.add("PHONE")
+        remainder = LABELED_PHONE_RULE.sub(" ", text)
+        if BARE_PHONE_RULE.search(remainder):
+            found.add("PHONE_UNLABELED")
+    return found
+
+
 def _level_for(label: str) -> Level:
     return LABEL_LEVELS.get(label, DEFAULT_LEVEL)
 
@@ -100,7 +151,7 @@ def scan_levels(texts: list[str]) -> list[Finding]:
     All findings with levels, strongest first, then by label. Covers the labeled
     patterns and the structured column checks. Duplicate labels are reported once.
     """
-    labels = set(scan_for_phi(texts)) | set(scan_structured(texts))
+    labels = set(scan_for_phi(texts)) | set(scan_structured(texts)) | scan_phone_labels(texts)
     findings = [Finding(label, _level_for(label)) for label in labels]
     return sorted(findings, key=lambda f: (LEVEL_RANK[f.level], f.label))
 

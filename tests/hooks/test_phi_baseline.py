@@ -4,6 +4,8 @@ Date: 2026-11-02
 Scope: baseline regression of current PHI detection, plus the level API
 Ticket: none (Arbiter is not Jira tracked)
 ChangeLog:
+  2026-11-02  A full address is now flagged, so the quiet check uses a street alone;
+              the registry is no longer empty.
   2026-11-02  Created. Pins what the detector flags and ignores today, so later
               rules can be added without changing old behavior. Values come from
               fake_phi.py and clean_corpus.py, built at run time.
@@ -59,7 +61,7 @@ class BaselineLabeledPatterns(unittest.TestCase):
         self.assertEqual(scan_for_phi([fake_phi.fake_mrn().lower()]), ["MRN"])
 
     def test_fake_values_without_labels_are_quiet(self) -> None:
-        for value in (fake_phi.fake_name(), fake_phi.fake_address(), fake_phi.fake_phone(),
+        for value in (fake_phi.fake_name(), fake_phi.fake_street(), fake_phi.fake_phone(),
                       fake_phi.fake_iso_date(), fake_phi.fake_us_date(), fake_phi.fake_mrn_value()):
             self.assertEqual(all_findings(value), [], value)
 
@@ -133,7 +135,8 @@ class LevelApi(unittest.TestCase):
 
     def test_unknown_label_defaults_to_deny(self) -> None:
         self.assertEqual(DEFAULT_LEVEL, Level.DENY)
-        self.assertEqual(LABEL_LEVELS, {})
+        self.assertNotIn("UNREGISTERED_LABEL", LABEL_LEVELS)
+        self.assertEqual(scan_levels([fake_phi.fake_address()]), [Finding("ADDRESS", Level.DENY)])
 
     def test_strongest_level(self) -> None:
         self.assertIsNone(strongest_level([]))
