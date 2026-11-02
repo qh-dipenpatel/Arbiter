@@ -32,8 +32,7 @@ PHI_PATTERNS: list[tuple[str, str]] = [
 ]
 
 # Column names are normalized (lowercase, no _ - space) then substring matched.
-# Derived from real CHN column names: MRN, PATMRNID, PATIENTID, BIRTHDATE, HOMEPHONE,
-# mrn_id, first_name, home_phone_number, PATIENTNAME, PATIENTIDENTIFIER.
+# Tokens cover common EHR export naming: MRN and patient ID variants, birth date, name and phone fields.
 # "fullname" deliberately excluded: Unity Catalog uses full_name for catalog.schema.table.
 PHI_COLUMN_TOKENS: tuple[str, ...] = (
     "mrn", "ssn", "socialsecurity", "birthdate", "dateofbirth", "dob",

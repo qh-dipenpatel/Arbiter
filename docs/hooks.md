@@ -2,7 +2,7 @@
 
 Created by Dipen Patel.
 
-Claude Code hooks are shell or Python scripts that fire at defined points in the agent loop. Arbiter uses eight hooks across four events, plus two shared modules (`hooks/phi_patterns.py` for PHI detection and payload text extraction, `hooks/sql_summary.py` for the Databricks approval summary). Each section below shows what the hook does and when it fires.
+Claude Code hooks are shell or Python scripts that fire at defined points in the agent loop. Arbiter wires twelve hooks across four events in `settings.json`, plus four shared modules (`hooks/state_file_io.py` for atomic, locked writes to state files, `hooks/phi_patterns.py` for PHI detection and payload text extraction, `hooks/sql_summary.py` for the Databricks approval summary, `hooks/read_guard_common.py` for the read before write guard) and two git hooks that are not Claude Code hooks (`hooks/git-pre-push`, `hooks/pre-commit-secrets`; see section 13). `python3 tests/hooks/check_hook_inventory.py` fails if a hook file, `settings.json` and this page disagree. Each section below shows what the hook does and when it fires.
 
 Hooks are defined in the repo `settings.json` and merged into `~/.claude/settings.json` with absolute paths by `installer/merge_settings.py`. The merge keeps your own hooks, permissions, env, and other settings, and replaces only Arbiter's hook entries (including stale paths from a moved repo). It also writes an `env` block (`ARBITER_KNOWLEDGE`, `ARBITER_CODE_DIR`, `CLAUDE_DOTFILES`) so hooks work in editors launched without your shell profile.
 
@@ -34,7 +34,9 @@ Controls that must prevent exposure belong in PreToolUse. PostToolUse is a secon
 
 - `pre-tool-write-scan-phi.py` **fails closed**. An unreadable payload, an import error, or any exception denies the write.
 - `pre-tool-bash-databricks-ask.py` fails to `ask`.
-- `pre-tool-bash-scan-phi.py` **fails open**, on purpose. Bash is the recovery path when the write hook is broken (see Recovery), and the PostToolUse scanner still checks the output.
+- `pre-tool-bash-scan-phi.py` **fails closed** (owner decision, 2026-11-01). Bad JSON, an import error, or any exception denies the command with an "internal error" message. It used to fail open so Bash could be the recovery path; that path is gone, see Recovery.
+- `pre-tool-bash-gate-pr-create.py` fails open on internal errors, except that a command it cannot parse falls back to a text match.
+- `pre-tool-write-require-read.py` and `post-tool-read-record.py` fail open: a logging or parsing problem never blocks work.
 
 ---
 
@@ -57,10 +59,16 @@ flowchart TD
   J["Claude reads result"]
   K["Context compression"]
   L["pre-compact-checkpoint-warn.sh"]
+  M["pre-tool-bash-scan-phi.py"]
+  N["pre-tool-bash-databricks-ask.py"]
+  O["pre-tool-bash-gate-pr-create.py"]
+  P["pre-tool-write-require-read.py"]
+  Q["post-tool-read-record.py"]
 
   A --> B --> C --> D
-  D -- "Write / Edit / MultiEdit" --> E --> F --> G
-  D -- "Bash" --> G
+  D -- "Write / Edit / MultiEdit" --> E --> F --> P --> G
+  D -- "Bash" --> M --> N --> O --> G
+  G -- "Read" --> Q --> J
   D -- "All other tools" --> G
   G -- "Bash output" --> H --> J
   G -- "Any tool result" --> I --> J
@@ -68,7 +76,7 @@ flowchart TD
   C --> K --> L
 
   class A actor
-  class B,E,F,H,I,L core
+  class B,E,F,H,I,L,M,N,O,P,Q core
 ```
 
 ---
@@ -180,7 +188,7 @@ flowchart TD
 
 **Event:** PreToolUse — fires before Write, Edit, and MultiEdit.
 
-Blocks writes to the read-only code directory (`ARBITER_CODE_DIR`). That directory is a RAG source mirror of production repos and must never be written to. If `ARBITER_CODE_DIR` is not set the hook bails silently.
+Blocks writes to the read-only code directory (`ARBITER_CODE_DIR`). That directory is a RAG source mirror of production repos and must never be written to. If `ARBITER_CODE_DIR` is not set the hook does not block, but it prints a visible warning (a `systemMessage` plus the same text on stderr) so an unprotected setup is not silent. Bash writes into the same directory are covered by section 12.
 
 ```mermaid
 flowchart TD
@@ -399,7 +407,11 @@ flowchart TD
 
 **Event:** PreToolUse — fires before every Bash command.
 
-Denies commands whose text contains PHI, for example `echo "..." > file`, heredocs, or inline data. Uses the shared patterns in `phi_patterns.py`. Fails open (see Fail closed vs fail open).
+Denies commands whose text contains PHI, for example `echo "..." > file`, heredocs, or inline data. Uses the shared patterns in `phi_patterns.py`.
+
+**Fails closed.** If the hook cannot run (bad payload, missing `phi_patterns.py`, any exception) it denies the command and says why. Decision by the owner on 2026-11-01: an unscanned command is treated as unsafe. Cost: a broken hook blocks all Bash, so fixes happen in an editor outside Claude Code (see Recovery).
+
+> **Known limit:** it scans the command text only. A script that generates or fetches PHI and writes it to a file at run time passes, because the PHI is not in the command text. `post-tool-result-scan-phi.py` still scans anything the script prints. A test named `test_known_limit_script_writing_phi_is_not_caught` documents this.
 
 ## 8. pre-tool-bash-databricks-ask.py
 
@@ -413,6 +425,12 @@ Denies commands whose text contains PHI, for example `echo "..." > file`, heredo
 - `query-history list`
 
 Metadata commands (catalogs, schemas, tables list/get, `fs ls`) pass through.
+
+**Also gated (same deny, then ask flow):**
+- Python (`python`, `uv`, `pyspark`, heredocs, `dbsqlcli`) that uses `databricks.sql`, `databricks_sql`, SDK row calls, `spark.sql`, `spark.table`, `spark.read` or `DatabricksSession`
+- `curl`, `wget` or `http` against a workspace host, `$DATABRICKS_HOST` or an `/api/2.x/sql` path
+
+**Not gated (known limits):** scripts run from a file, jobs and notebooks running inside Databricks, MCP tools, JDBC/ODBC/BI clients, dbt, obfuscated commands, hosts not named in `DATABRICKS_HOST`, other languages. Each of these can return row data without this approval step.
 
 **Flow (deny first, then ask):**
 1. First attempt: the hook returns `deny` with a summary and an approval code. The code is an 8 character hash of the exact command.
@@ -439,11 +457,41 @@ The summary covers what is being pulled:
 
 SQL the standard library parser cannot handle (CTEs, subqueries, multiple statements) is shown as "Could not parse, review the SQL below". It never guesses. Command parsing is quote aware, so `cd x && databricks ... | jq` and SQL containing `;` are handled.
 
+## 9. pre-tool-bash-gate-pr-create.py
+
+**Event:** PreToolUse, fires before every Bash command.
+
+Blocks a PR creation command (exit 2) until Claude has shown you the PR title, body, base branch and diff summary and you have said to go ahead. Text that only mentions the phrase (a commit message, a quoted string) is allowed; `bash -c`, `eval` and substitutions are unwrapped. Why wired: it enforces the rule that Claude never opens a PR on its own, and it fires only on that one command, so it is quiet.
+
+## 10. pre-tool-write-require-read.py
+
+**Event:** PreToolUse, fires before Write, Edit and MultiEdit.
+
+For files matching `GUARD_REGEX` (default: names ending in `-state.md`) that already exist, blocks the write (exit 2) unless the file was read earlier in this session, as recorded by `post-tool-read-record.py`. New files pass. Why wired: handoff state files are rewritten by many skills, and a blind overwrite loses the previous state. Quiet, because the default pattern matches only state files. Fails open.
+
+## 11. post-tool-read-record.py
+
+**Event:** PostToolUse, matcher `Read`.
+
+Appends the path of each guarded file that Claude reads to a per session log under `ARBITER_STATE_DIR` (default `$HOME/.arbiter/state`), which section 10 checks. Always exits 0. Both hooks share `hooks/read_guard_common.py`.
+
+## 12. pre-tool-bash-guard-code-dir.py
+
+**Event:** PreToolUse, fires before every Bash command.
+
+Blocks Bash commands that write into the read-only code directory (`ARBITER_CODE_DIR`): `rm`, `mv`, `touch`, `tee`, `mkdir`, `rmdir`, `truncate`, `dd`, `chmod`, `chown`, `sed -i`, redirects (`>`, `>>`, `&>`), git write commands run inside it, and `cp`, `install` or `ln` when the directory is the destination (copying out of it is allowed). Silent when the variable is unset; section 4 carries the warning.
+
+> **Known limit:** it matches path text. Other variables expanded later, command substitution, obfuscated paths and writes made by an interpreter (for example `python -c`) pass.
+
+## 13. Git hooks (not Claude Code hooks)
+
+`hooks/git-pre-push` blocks pushes to protected branches (`ARBITER_PROTECTED_BRANCHES`, default `main master`) and can run an optional check. `hooks/pre-commit-secrets` blocks commits whose staged diff contains known token patterns. Neither is in `settings.json`; copy them into a repo's `.git/hooks/` (see `install.sh`). They are exempt from the wiring check in `tests/hooks/check_hook_inventory.py`.
+
 ## Testing
 
 | Tier | Command | What it proves |
 |---|---|---|
-| 1 | `bash tests/hooks/run.sh` | Fixture tests, plus `tests/hooks/test_hooks.py`: every hook's JSON validated against the schema above, detection cases (including metadata that must stay quiet), approval summaries, settings merge |
+| 1 | `bash tests/hooks/run.sh` | Fixture tests, the hook inventory check, plus `tests/hooks/test_hooks.py`: every hook's JSON validated against the schema above, detection cases (including metadata that must stay quiet), approval summaries, settings merge |
 | 2 | `tests/e2e/run.sh` | Real `install.sh --non-interactive` into a temp HOME under macOS `/bin/bash` 3.2, then a real `claude -p` session using only the installed settings. Asserts each hook fired, succeeded, and its output was delivered. About 2 minutes and a few API calls. |
 | 3 | `tests/hooks/e2e-wiring-checklist.md` | What a human sees: approval prompt rendering, vault context |
 
@@ -453,10 +501,10 @@ Test fixtures must not contain PHI shaped literals. The PHI write hook blocks Cl
 
 ## Recovery if a hook breaks
 
-A bug in `pre-tool-write-scan-phi.py` blocks every Write and Edit, including the edit that would fix it, because it fails closed. This happened once during development.
+A bug in `pre-tool-write-scan-phi.py` blocks every Write and Edit, including the edit that would fix it, because it fails closed. A bug in `pre-tool-bash-scan-phi.py` or in the shared `phi_patterns.py` blocks every Bash command the same way, so Bash is no longer a way around a broken write hook. This happened once during development.
 
-1. Ask Claude to fix the file through Bash (for example a Python one liner). The write hook does not gate Bash.
-2. Or fix it yourself in an editor outside Claude Code.
+1. Fix the file yourself in an editor outside Claude Code.
+2. Or temporarily remove the broken hook's entry from `~/.claude/settings.json` (step 3 below).
 3. Last resort: remove the hook's entry from `~/.claude/settings.json`, fix the file, then re-run `install.sh` to restore it.
 
 Then run `bash tests/hooks/run.sh` before continuing.

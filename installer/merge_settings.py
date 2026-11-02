@@ -10,7 +10,7 @@ ChangeLog:
               user key (hooks, permissions, env, model, plugins, statusLine).
 
 Rules:
-  - Placeholders ($CLAUDE_DOTFILES, $ARBITER_KNOWLEDGE, $QH_SCRIPTS) are substituted inside
+  - Placeholders ($CLAUDE_DOTFILES, $ARBITER_KNOWLEDGE, $ARBITER_SCRIPTS) are substituted inside
     parsed JSON strings, so paths with quotes or backslashes cannot break the JSON.
   - hooks: Arbiter owned hook groups (any command whose file name is an Arbiter hook) are
     removed, including stale paths from a moved repo, then the template groups are added.
@@ -131,7 +131,7 @@ def main(argv: list[str]) -> int:
     with open(template_path) as fh:
         template = json.load(fh)
     template = substitute(template, {
-        "$CLAUDE_DOTFILES": repo_dir, "$ARBITER_KNOWLEDGE": vault_dir, "$QH_SCRIPTS": scripts_dir})
+        "$CLAUDE_DOTFILES": repo_dir, "$ARBITER_KNOWLEDGE": vault_dir, "$ARBITER_SCRIPTS": scripts_dir})
     env = {"ARBITER_KNOWLEDGE": vault_dir, "ARBITER_CODE_DIR": code_dir, "CLAUDE_DOTFILES": repo_dir}
     write_atomic(target, merge(load_user(target), template, env))
     return 0

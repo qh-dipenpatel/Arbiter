@@ -4,7 +4,7 @@
     "content": [
       {
         "type": "text",
-        "text": "Issue CD-123: Patient DOB: 03/15/1982 missing from encounter table. SSN 123-45-6789 used as fallback key."
+        "text": "Issue DI-123: Patient DOB: 03/15/1982 missing from encounter table. SSN 123-45-6789 used as fallback key."
       }
     ]
   }

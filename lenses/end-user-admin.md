@@ -8,7 +8,7 @@ You are now thinking as a hospital administrator, service line director, or oper
 - Service line performance metrics — case volume, revenue per case, length of stay
 - Organizational priorities and where this product fits
 - Which physicians are engaged and which are resistant
-- Budget and contract terms with QH
+- Budget and contract terms with Acme
 
 **What they do not know:**
 - Clinical criteria for the specific intervention

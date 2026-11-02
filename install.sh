@@ -13,8 +13,11 @@ OS="$(uname -s)"   # Darwin | Linux | MINGW* | CYGWIN*
 # ./install.sh --non-interactive   or   ARBITER_NONINTERACTIVE=1 ./install.sh
 # Every prompt takes its default. Service connections are skipped. An existing
 # setup is always migrated, never cleaned, so ~/.claude is never wiped unattended.
+# ./install.sh --dry-run   prints every action that would change disk, runs none.
+DRY_RUN=0
 for _arg in "$@"; do
   [ "$_arg" = "--non-interactive" ] && ARBITER_NONINTERACTIVE=1
+  [ "$_arg" = "--dry-run" ] && DRY_RUN=1
 done
 ARBITER_NONINTERACTIVE="${ARBITER_NONINTERACTIVE:-0}"
 
@@ -106,9 +109,16 @@ cred_store() {
     return
   fi
   local key="${KC_PREFIX}-${service}"
+  if [ "$DRY_RUN" = 1 ]; then
+    note "[dry-run] would store credential: ${service}"
+    return
+  fi
   case "$OS" in
     Darwin)
-      security add-generic-password -a "$USER" -s "$key" -w "$value" -U 2>/dev/null
+      # -w with no value (last option) makes security prompt on the terminal.
+      # A value after -w would sit in the process list, readable by every user.
+      note "macOS Keychain will ask for the ${service} value (type it twice)."
+      security add-generic-password -a "$USER" -s "$key" -U -w
       ok "Saved to Keychain: ${service}"
       ;;
     Linux)
@@ -217,6 +227,46 @@ backup() {
   fi
 }
 
+# ── Backup ~/.claude as a full copy, verified ─────────────────────────────────
+# Sets BACKUP_DIR and BACKUP_VERIFIED. Returns non-zero when the copy is not
+# complete; the caller decides whether that is fatal (clean mode: always).
+_count_all_files() { find -L "$1" -type f 2>/dev/null | wc -l | tr -d ' '; }
+
+backup_claude_dir() {
+  BACKUP_VERIFIED=0
+  BACKUP_DIR="$HOME/.claude.backup.$(date +%Y%m%d%H%M%S)"
+  if [ "$DRY_RUN" = 1 ]; then
+    note "[dry-run] would copy $CLAUDE_DIR to $BACKUP_DIR and verify file counts"
+    return 0
+  fi
+  cp -rL "$CLAUDE_DIR" "$BACKUP_DIR" 2>/dev/null \
+    || cp -r "$CLAUDE_DIR" "$BACKUP_DIR" 2>/dev/null \
+    || { BACKUP_DIR=""; return 1; }
+  local _src _dst
+  _src=$(_count_all_files "$CLAUDE_DIR")
+  _dst=$(_count_all_files "$BACKUP_DIR")
+  if [ "$_src" != "$_dst" ]; then
+    note "Backup check failed: $_src files in source, $_dst in copy ($BACKUP_DIR)."
+    BACKUP_DIR=""
+    return 1
+  fi
+  BACKUP_VERIFIED=1
+}
+
+# ── Wipe ~/.claude. Only runs after a verified backup. ────────────────────────
+clean_claude_dir() {
+  if [ "$DRY_RUN" = 1 ]; then
+    note "[dry-run] would delete $CLAUDE_DIR and recreate it empty"
+    return 0
+  fi
+  if [ "$BACKUP_VERIFIED" != 1 ] || [ -z "$BACKUP_DIR" ] || [ ! -d "$BACKUP_DIR" ]; then
+    echo "  Clean aborted: no verified backup. $CLAUDE_DIR was not touched." >&2
+    return 1
+  fi
+  rm -rf "$CLAUDE_DIR"
+  mkdir -p "$CLAUDE_DIR"
+}
+
 symlink() {
   local src="$1" dest="$2"
   backup "$dest"
@@ -292,7 +342,9 @@ if [ -d "$CLAUDE_DIR" ] && [ "$(ls -A "$CLAUDE_DIR" 2>/dev/null)" ]; then
   TICKET_FILE=$(ls "$CLAUDE_DIR/commands/"*-ticket.md 2>/dev/null | head -1 || echo "")
   [ -n "$TICKET_FILE" ] && DETECTED_PREFIX=$(basename "$TICKET_FILE" | sed 's/-ticket\.md//')
 
-  for _v in QH_KNOWLEDGE DT_KNOWLEDGE DP_KNOWLEDGE SF_KNOWLEDGE ARBITER_KNOWLEDGE; do
+  _PREFIX_VAR=""
+  [ -n "$DETECTED_PREFIX" ] && _PREFIX_VAR="$(printf '%s' "$DETECTED_PREFIX" | tr '[:lower:]' '[:upper:]')_KNOWLEDGE"
+  for _v in $_PREFIX_VAR ARBITER_KNOWLEDGE; do
     if [ -n "${!_v:-}" ]; then
       DETECTED_VAULT="${!_v}"
       break
@@ -362,17 +414,20 @@ if [ -d "$CLAUDE_DIR" ] && [ "$(ls -A "$CLAUDE_DIR" 2>/dev/null)" ]; then
   echo ""
 
   # Backup always, before any changes
-  BACKUP_DIR="$HOME/.claude.backup.$(date +%Y%m%d%H%M%S)"
-  cp -rL "$CLAUDE_DIR" "$BACKUP_DIR" 2>/dev/null \
-    || cp -r "$CLAUDE_DIR" "$BACKUP_DIR" 2>/dev/null \
-    || { note "Could not fully back up $CLAUDE_DIR — continuing anyway (original untouched)."; BACKUP_DIR=""; }
-  [ -n "$BACKUP_DIR" ] && ok "Backed up existing setup to: $BACKUP_DIR"
+  BACKUP_VERIFIED=0
+  if backup_claude_dir; then
+    [ "$DRY_RUN" = 1 ] || ok "Backed up existing setup to: $BACKUP_DIR"
+  elif [ "$INSTALL_MODE" = "clean" ]; then
+    echo "  Could not back up $CLAUDE_DIR. Clean mode needs a backup, so nothing was deleted." >&2
+    exit 1
+  else
+    note "Could not fully back up $CLAUDE_DIR — continuing anyway (original untouched)."
+  fi
   echo ""
 
   if [ "$INSTALL_MODE" = "clean" ]; then
-    rm -rf "$CLAUDE_DIR"
-    mkdir -p "$CLAUDE_DIR"
-    ok "Cleared existing setup — starting fresh"
+    clean_claude_dir || exit 1
+    [ "$DRY_RUN" = 1 ] || ok "Cleared existing setup — starting fresh"
     echo ""
   fi
 
@@ -475,6 +530,22 @@ if [ -d "$CLAUDE_DIR" ] && [ "$(ls -A "$CLAUDE_DIR" 2>/dev/null)" ]; then
     fi
   fi
 fi  # end existing-setup detection
+
+# ── Dry run stops here: everything below writes to disk or asks for secrets ──
+if [ "$DRY_RUN" = 1 ]; then
+  header "Dry run: remaining actions (none executed)"
+  note "[dry-run] would write $ARBITER_CONFIG (saved answers)"
+  note "[dry-run] would create the notes vault, scripts and code folders"
+  note "[dry-run] would clone or update repos listed during setup"
+  note "[dry-run] would install commands into $CLAUDE_DIR/commands and CLAUDE.md"
+  note "[dry-run] would store service credentials in the OS keychain"
+  note "[dry-run] would write $CREDS_SCRIPT and register MCP servers"
+  note "[dry-run] would append an env block to your shell profile"
+  note "[dry-run] would merge hooks into $CLAUDE_DIR/settings.json"
+  note "[dry-run] would optionally pip install and build the search index"
+  echo ""
+  exit 0
+fi
 
 # ── Step 1: Your Details ──────────────────────────────────────────────────────
 if [ "$SIMPLE_MODE" = true ]; then
@@ -736,19 +807,8 @@ for src_file in "$REPO_DIR/commands/"*.md; do
   esac
   backup "$CLAUDE_DIR/commands/$dest_name"
   sed \
-    -e "s|/qh-ticket|/${SKILL_PREFIX}-ticket|g" \
-    -e "s|/qh-support|/${SKILL_PREFIX}-support|g" \
-    -e "s|/qh-spec|/${SKILL_PREFIX}-spec|g" \
-    -e "s|/qh-arch|/${SKILL_PREFIX}-arch|g" \
-    -e "s|/qh-dev|/${SKILL_PREFIX}-dev|g" \
-    -e "s|/qh-qa|/${SKILL_PREFIX}-qa|g" \
-    -e "s|~/qh-output/|\$QH_KNOWLEDGE/output/|g" \
-    -e "s|QH_KNOWLEDGE|${PREFIX_UPPER}_KNOWLEDGE|g" \
-    -e "s|QH_MEETINGS|${PREFIX_UPPER}_MEETINGS|g" \
-    -e "s|QH_SCRIPTS|${PREFIX_UPPER}_SCRIPTS|g" \
-    -e "s|qh-code-temp|${SKILL_PREFIX}-code-temp|g" \
-    -e "s|qh-code/|${SKILL_PREFIX}-code/|g" \
-    -e "s|qh-scripts|${SKILL_PREFIX}-scripts|g" \
+    -e "s|{prefix}-|${SKILL_PREFIX}-|g" \
+    -e "s|{PREFIX_UPPER}|${PREFIX_UPPER}|g" \
     -e "s|{NAME}|${USER_NAME_ESC}|g" \
     -e "s|{COMPANY}|${USER_COMPANY_ESC}|g" \
     "$src_file" > "$CLAUDE_DIR/commands/$dest_name"
@@ -766,24 +826,12 @@ if [ -d "$REPO_DIR/cursor-rules" ]; then
   _apply_cursor_rule() {
     local src_file="$1" dest="$2"
     sed \
-      -e "s|/qh-ticket|/${SKILL_PREFIX}-ticket|g" \
-      -e "s|/qh-support|/${SKILL_PREFIX}-support|g" \
-      -e "s|/qh-spec|/${SKILL_PREFIX}-spec|g" \
-      -e "s|/qh-arch|/${SKILL_PREFIX}-arch|g" \
-      -e "s|/qh-dev|/${SKILL_PREFIX}-dev|g" \
-      -e "s|/qh-qa|/${SKILL_PREFIX}-qa|g" \
-      -e "s|~/qh-output/|\$QH_KNOWLEDGE/output/|g" \
-      -e "s|QH_KNOWLEDGE|${PREFIX_UPPER}_KNOWLEDGE|g" \
-      -e "s|QH_MEETINGS|${PREFIX_UPPER}_MEETINGS|g" \
-      -e "s|QH_SCRIPTS|${PREFIX_UPPER}_SCRIPTS|g" \
-      -e "s|qh-code-temp|${SKILL_PREFIX}-code-temp|g" \
-      -e "s|qh-code/|${SKILL_PREFIX}-code/|g" \
-      -e "s|qh-scripts|${SKILL_PREFIX}-scripts|g" \
+      -e "s|{prefix}-|${SKILL_PREFIX}-|g" \
+      -e "s|{PREFIX_UPPER}|${PREFIX_UPPER}|g" \
       -e "s|\[YOUR NAME\]|${USER_NAME_ESC}|g" \
       -e "s|\[YOUR TITLE\]|${USER_TITLE_ESC}|g" \
       -e "s|\[YOUR COMPANY\]|${USER_COMPANY_ESC}|g" \
       -e "s|Health AI\. PHI/PII rules apply at all times, no exceptions\.|${USER_DOMAIN_ESC}. PHI/PII rules apply at all times, no exceptions.|g" \
-      -e "s|/{prefix}-|/${SKILL_PREFIX}-|g" \
       "$src_file" > "$dest"
   }
 
@@ -871,9 +919,6 @@ sed \
   -e "s|\[YOUR TITLE\]|${USER_TITLE_ESC}|g" \
   -e "s|\[YOUR COMPANY\]|${USER_COMPANY_ESC}|g" \
   -e "s|Health AI\. PHI/PII rules apply at all times, no exceptions\.|${USER_DOMAIN_ESC}. PHI/PII rules apply at all times, no exceptions.|g" \
-  -e "s|QH_KNOWLEDGE|${PREFIX_UPPER}_KNOWLEDGE|g" \
-  -e "s|QH_MEETINGS|${PREFIX_UPPER}_MEETINGS|g" \
-  -e "s|QH_SCRIPTS|${PREFIX_UPPER}_SCRIPTS|g" \
   -e "s|/{prefix}-ticket|/${SKILL_PREFIX}-ticket|g" \
   -e "s|/{prefix}-support|/${SKILL_PREFIX}-support|g" \
   -e "s|/{prefix}-spec|/${SKILL_PREFIX}-spec|g" \

@@ -180,7 +180,7 @@ echo $DP_SCRIPTS      # → ~/Developer/dipen/dp-scripts
 echo $CLAUDE_DOTFILES # → ~/Developer/dipen/dp-dotfiles
 ```
 
-Your prefix uppercased becomes the env var prefix. Prefix `dp` gives `$DP_KNOWLEDGE`. Prefix `qh` gives `$QH_KNOWLEDGE`.
+Your prefix uppercased becomes the env var prefix. Prefix `dp` gives `$DP_KNOWLEDGE`. Prefix `ab` gives `$AB_KNOWLEDGE`.
 
 ---
 
@@ -235,11 +235,11 @@ Here is the complete picture with `dipen` as the base and `dp` as the prefix. Ev
 │   │   ├── data-model/
 │   │   └── platform-learning/
 │   ├── 02-tickets/
-│   │   └── CD-200/
-│   │       ├── CD-200-state.md
-│   │       ├── CD-200-spec.md
-│   │       ├── CD-200-design.md
-│   │       └── CD-200-session-2026-06-14.md
+│   │   └── DI-200/
+│   │       ├── DI-200-state.md
+│   │       ├── DI-200-spec.md
+│   │       ├── DI-200-design.md
+│   │       └── DI-200-session-2026-06-14.md
 │   ├── 03-knowledge-base/
 │   │   ├── decisions/
 │   │   ├── learnings/
@@ -305,31 +305,31 @@ And what Claude Code reads at runtime:
 A ticket starts empty and accumulates files as you work through the chain. The state file is the thread that connects every session.
 
 ```
-02-tickets/CD-200/
+02-tickets/DI-200/
 
 After /dp-ticket:
-  CD-200-state.md              Status: ROUTED
+  DI-200-state.md              Status: ROUTED
                                Known / Unknown / Assuming block written
 
 After /dp-support:
-  CD-200-state.md              Status: SUPPORT_COMPLETE
-  CD-200-support-handoff.md    Root cause, evidence, fix recommendation
+  DI-200-state.md              Status: SUPPORT_COMPLETE
+  DI-200-support-handoff.md    Root cause, evidence, fix recommendation
 
 After /dp-spec:
-  CD-200-state.md              Status: SPEC_COMPLETE
-  CD-200-spec.md               Requirements, acceptance criteria, success metrics
+  DI-200-state.md              Status: SPEC_COMPLETE
+  DI-200-spec.md               Requirements, acceptance criteria, success metrics
 
 After /dp-arch:
-  CD-200-state.md              Status: DESIGN_APPROVED
-  CD-200-design.md             Options, tradeoffs, approved recommendation
+  DI-200-state.md              Status: DESIGN_APPROVED
+  DI-200-design.md             Options, tradeoffs, approved recommendation
 
 After /dp-qa:
-  CD-200-state.md              Status: QA_APPROVED
-  CD-200-qa-findings.md        Findings routed to dev, arch, or spec
+  DI-200-state.md              Status: QA_APPROVED
+  DI-200-qa-findings.md        Findings routed to dev, arch, or spec
 
 After /close:
-  CD-200-state.md              Status: CLOSED
-  CD-200-session-2026-06-14.md Done / Decided / Pending summary
+  DI-200-state.md              Status: CLOSED
+  DI-200-session-2026-06-14.md Done / Decided / Pending summary
 ```
 
 Any session can pick up any ticket by reading the state file. No recap needed.
@@ -345,7 +345,7 @@ Any session can pick up any ticket by reading the state file. No recap needed.
 | `${PREFIX}_SCRIPTS` | `~/Developer/{base}/{prefix}-scripts` | install.sh |
 | `$CLAUDE_DOTFILES` | `~/Developer/{base}/{prefix}-dotfiles` | install.sh |
 
-`PREFIX` is your skill prefix in uppercase. Prefix `dp` gives `$DP_KNOWLEDGE`, `$DP_MEETINGS`, `$DP_SCRIPTS`. Prefix `qh` gives `$QH_KNOWLEDGE`, `$QH_MEETINGS`, `$QH_SCRIPTS`.
+`PREFIX` is your skill prefix in uppercase. Prefix `dp` gives `$DP_KNOWLEDGE`, `$DP_MEETINGS`, `$DP_SCRIPTS`. Prefix `ab` gives `$AB_KNOWLEDGE`, `$AB_MEETINGS`, `$AB_SCRIPTS`.
 
 ---
 

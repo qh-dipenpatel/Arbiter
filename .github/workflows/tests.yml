@@ -1,0 +1,31 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Hook shell tests
+        run: bash tests/hooks/run.sh
+
+      - name: Hook inventory check
+        run: python3 tests/hooks/check_hook_inventory.py
+
+      - name: Python unit tests
+        run: python3 -m unittest discover -s tests/hooks -p 'test_*.py'
+
+      - name: Installer tests
+        run: bash tests/installer/run.sh

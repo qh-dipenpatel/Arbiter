@@ -4,7 +4,7 @@
 by any AI (or the next session) if things crash or context runs out.
 Like Ctrl+S — saves to disk, no commit. /close commits at session end.
 
-**Vault:** `$QH_KNOWLEDGE/`
+**Vault:** `${PREFIX_UPPER}_KNOWLEDGE/`
 
 ---
 
@@ -78,10 +78,10 @@ Notes: [anything worth remembering — corrections, surprises, context]
 If this session is working a Jira ticket (`/ticket [KEY]` was invoked), also write or append to:
 
 ```
-~/qh-output/{JIRA-KEY}/YYYY-MM-DD.md
+${PREFIX_UPPER}_KNOWLEDGE/output/{JIRA-KEY}/YYYY-MM-DD.md
 ```
 
-- Create the folder if it doesn't exist (`mkdir -p ~/qh-output/{JIRA-KEY}/`)
+- Create the folder if it doesn't exist (`mkdir -p ${PREFIX_UPPER}_KNOWLEDGE/output/{JIRA-KEY}/`)
 - If the file already exists for today, append a `## Session N — HH:MM` heading
 - Content: ORIENT output, key findings so far, SQL or drafts produced, open questions, next steps
 - This is for manual browsing only — not indexed, not committed
@@ -94,7 +94,7 @@ If this session is working a Jira ticket (`/ticket [KEY]` was invoked), also wri
 SAVED — [YYYY-MM-DD HH:MM TZ]
 
 Session log: 00-landing/session-log.md updated (DRAFT entry)
-Output archive: ~/qh-output/{JIRA-KEY}/YYYY-MM-DD.md (written / skipped — no ticket)
+Output archive: ${PREFIX_UPPER}_KNOWLEDGE/output/{JIRA-KEY}/YYYY-MM-DD.md (written / skipped — no ticket)
 Note: [what was captured, or "synthesized from session"]
 
 Still in session — /close will finalize and commit at session end.

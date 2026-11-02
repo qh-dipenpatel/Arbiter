@@ -5,7 +5,7 @@ classify its type, and route it to the right skill chain. Makes every ticket rea
 someone who arrives cold — through a context block in the description and a comment trail
 that tells the full story from start to completion.
 
-**Vault:** `$QH_KNOWLEDGE/`
+**Vault:** `${PREFIX_UPPER}_KNOWLEDGE/`
 **Jira:** [your-org].atlassian.net
 
 ---
@@ -52,7 +52,7 @@ CLIENT CONTEXT
   Catalog:    [Unity Catalog name, e.g. acme_dev]
   Schema:     [schema name]
   Pipeline:   [Databricks job/pipeline name]
-  Notebook:   [notebook path in repo, e.g. databricks/pipelines/clients/chn/...]
+  Notebook:   [notebook path in repo, e.g. databricks/pipelines/clients/<client>/...]
   Table(s):   [relevant table names]
   Git:        [branch name or file link if known]
 ```
@@ -84,7 +84,7 @@ CONTRADICTIONS  ← emit before KNOWN; omit entirely if none
   [CONTRADICTION] State file says X. New data says Y. Which is current?
 
 KNOWN (verified from vault / Jira / code)
-  - [fact]  [source: file / Jira / qh-code/...]
+  - [fact]  [source: file / Jira / {prefix}-code/...]
 
 UNKNOWN (gaps — cannot be answered from current sources)
   - [gap]
@@ -127,9 +127,9 @@ Based on {NAME}'s explain-back, the Jira issuetype, title, and description:
 
 | Type | Signals | Chain |
 |---|---|---|
-| **Bug** | issuetype: Bug / Sub-task; "wrong", "null", "incorrect", "mismatch", "not populating", "excluded", "error", "fix" | `/qh-support` → `/qh-spec` → `/qh-arch` → `/qh-dev` → `/qh-qa` |
-| **New Build** | issuetype: Story / Epic; "build", "create", "implement", "add capability" | `/qh-spec` → `/qh-arch` → `/qh-dev` → `/qh-qa` |
-| **Research** | "investigate", "understand", "scope", "explore", "assess", "analyze", "what is" | `/explore` → (confirm) → `/qh-spec` → ... |
+| **Bug** | issuetype: Bug / Sub-task; "wrong", "null", "incorrect", "mismatch", "not populating", "excluded", "error", "fix" | `/{prefix}-support` → `/{prefix}-spec` → `/{prefix}-arch` → `/{prefix}-dev` → `/{prefix}-qa` |
+| **New Build** | issuetype: Story / Epic; "build", "create", "implement", "add capability" | `/{prefix}-spec` → `/{prefix}-arch` → `/{prefix}-dev` → `/{prefix}-qa` |
+| **Research** | "investigate", "understand", "scope", "explore", "assess", "analyze", "what is" | `/explore` → (confirm) → `/{prefix}-spec` → ... |
 | **Coordination** | "loop in", "unblock", "follow up", "contact", "coordinate", "waiting on" | Handle directly |
 | **Communication** | "notify", "update client", "draft message", "inform" | Handle directly |
 | **Documentation** | "document", "update vault", "write runbook", "capture" | Handle directly |
@@ -161,7 +161,7 @@ No additional wait — the explain-back gate was the confirmation moment.
 
 ### Stop and hand off (next thread)
 
-Do not auto-invoke the next skill. /qh-ticket output (ORIENT block + Jira draft) is substantial; chaining into /qh-support or /qh-spec in the same thread consumes the cache window with no benefit. Start the next skill in a fresh thread.
+Do not auto-invoke the next skill. /{prefix}-ticket output (ORIENT block + Jira draft) is substantial; chaining into /{prefix}-support or /{prefix}-spec in the same thread consumes the cache window with no benefit. Start the next skill in a fresh thread.
 
 End output:
 
@@ -181,7 +181,7 @@ Next session starter prompt (copy into a new thread):
 
 State file at 02-tickets/{KEY}/{KEY}-state.md (Status: ROUTED).
 [One to two sentences naming the first skill, what it produces, and what
-to expect — bug → /qh-support produces handoff; new build → /qh-spec
+to expect — bug → /{prefix}-support produces handoff; new build → /{prefix}-spec
 produces AC+VS; research → /explore produces a scope brief in the vault.]
 
 ═══════════════════════════════════════════════════════════════

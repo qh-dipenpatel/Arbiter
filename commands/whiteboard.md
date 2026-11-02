@@ -19,7 +19,7 @@ Raw idea → /whiteboard → [Build / Park / Drop] → your backlog → build
 `/whiteboard [idea description]`
 `/whiteboard quick [idea description]` — abbreviated (dimensions 0, 1, 2, 5, 9, 10 only)
 
-**Auto-escalation:** If `/whiteboard quick` is invoked and the idea mentions a skill file, slash command, or S-18 redesign — say "Quick mode escalated to full — skill redesigns require all dimensions" and proceed with full mode.
+**Auto-escalation:** If `/whiteboard quick` is invoked and the idea mentions a skill file or slash command, say "Quick mode escalated to full — skill redesigns require all dimensions" and proceed with full mode.
 
 If idea is too vague to state as a problem, say so and ask the user to sharpen it first.
 
@@ -52,7 +52,7 @@ Run through all eight dimensions independently from the idea description and pro
 **1. Viability**
 
 Assess viability:
-- Current stack (qh-scripts, Claude Code skills, vault, ChromaDB, Databricks SDK, Ollama)
+- Current stack ({prefix}-scripts, Claude Code skills, vault, ChromaDB, Databricks SDK, Ollama)
 - Session time required — one session, multiple, or ongoing maintenance?
 - Skills or knowledge gaps that would block it?
 - Is there a simpler version that delivers 80% of the value in 20% of the build time?
@@ -167,16 +167,6 @@ Produce:
 - One-paragraph backlog entry (ready to paste into `backlog.md` with S-XX placeholder)
 - Recommended priority (P0 / P1 / P2 / P3)
 - Suggested v1 scope (what v1 covers, what is explicitly out of scope)
-
-**Skill redesign additional output:**
-If the idea involves redesigning a skill file, also produce:
-
-```
-S-18 STATE ENTRY — paste into S-18-state.md:
-- /[skill] redesigned YYYY-MM-DD. [One sentence: what changed, key design decisions]. COMPLETE.
-```
-
-The BUILD verdict is not complete for skill redesigns until this entry is written and ready to paste.
 
 **PARK**
 Good idea, wrong time or missing prerequisites.

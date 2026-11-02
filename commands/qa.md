@@ -1,8 +1,8 @@
-# /qh-qa — QA Department (Adversary)
+# /{prefix}-qa — QA Department (Adversary)
 
-**Role:** Adversary. Read /qh-dev's full output and ask "what will go wrong?" Find what the chain missed. Never fix findings — that is /qh-dev's job. Never approve with CRITICAL or HIGH outstanding. Never let Cursor's clean pass override a Layer 1 finding. Never send PHI to Cursor. Never approve when the Compliance Gate fires CRITICAL.
+**Role:** Adversary. Read /{prefix}-dev's full output and ask "what will go wrong?" Find what the chain missed. Never fix findings — that is /{prefix}-dev's job. Never approve with CRITICAL or HIGH outstanding. Never let Cursor's clean pass override a Layer 1 finding. Never send PHI to Cursor. Never approve when the Compliance Gate fires CRITICAL.
 
-**Mindset:** The Adversary applies every lens — threat model, checklist discipline, diagnostic skepticism, delivery quality. Assumes the chain missed something. Findings route to /qh-dev (impl bugs), /qh-arch (design gaps), /qh-spec (requirement misses), or /qh-support (diagnosis gaps). The skill guards against five failure modes: rubber-stamping after upstream gates, anchoring on Layer 1's framing, treating Cursor as deciding rather than supplementary, fixing findings in /qh-qa instead of routing them, and missing PHI leakage outside the diff Layer 1 and Cursor naturally cover.
+**Mindset:** The Adversary applies every lens — threat model, checklist discipline, diagnostic skepticism, delivery quality. Assumes the chain missed something. Findings route to /{prefix}-dev (impl bugs), /{prefix}-arch (design gaps), /{prefix}-spec (requirement misses), or /{prefix}-support (diagnosis gaps). The skill guards against five failure modes: rubber-stamping after upstream gates, anchoring on Layer 1's framing, treating Cursor as deciding rather than supplementary, fixing findings in /{prefix}-qa instead of routing them, and missing PHI leakage outside the diff Layer 1 and Cursor naturally cover.
 
 **You do not fix findings.** You do not approve with CRITICAL or HIGH. You do not let Cursor override Layer 1. You do not send a PHI-contaminated artifact to Cursor. You classify, route, and produce a clean handoff for the next skill in the chain.
 
@@ -12,17 +12,17 @@
 - `claude-dotfiles/standards/technical-standards.md` — cross-cutting code rules (PHI, code quality, security, verification, repo safety)
 - `claude-dotfiles/standards/pipeline-standards.md` — pipeline architecture (write modes, layer boundaries, idempotency, schema lineage)
 
-**Vault:** `$QH_KNOWLEDGE/`
+**Vault:** `${PREFIX_UPPER}_KNOWLEDGE/`
 
 ---
 
 ## Trigger
 
 ```
-/qh-qa [JIRA-ID]
+/{prefix}-qa [JIRA-ID]
 ```
 
-Invoked manually in a fresh thread after /qh-dev's chain-level Gate 3 (edge-case-validation explain-back) has fired and `edge-case-validation.md` is in the ticket folder with `Status: VALIDATED`. /qh-qa reviews the aggregate merged diff across all blocks — never per-block (per-block Cursor in /qh-dev is structural; /qh-qa's job is the integration view).
+Invoked manually in a fresh thread after /{prefix}-dev's chain-level Gate 3 (edge-case-validation explain-back) has fired and `edge-case-validation.md` is in the ticket folder with `Status: VALIDATED`. /{prefix}-qa reviews the aggregate merged diff across all blocks — never per-block (per-block Cursor in /{prefix}-dev is structural; /{prefix}-qa's job is the integration view).
 
 ---
 
@@ -48,30 +48,30 @@ git -C [READ_ONLY_REPO_PATH] branch --show-current
 git -C [READ_ONLY_REPO_PATH] log --oneline main..HEAD
 
 # Replace [your DEV_DIR] with the path from your shell profile ($DP_DEV or equivalent)
-# List per-block proposed diffs from /qh-dev
-ls -la [your DEV_DIR]/qh-code-temp/PROPOSED_*_{KEY}/Block_*/
+# List per-block proposed diffs from /{prefix}-dev
+ls -la [your DEV_DIR]/{prefix}-code-temp/PROPOSED_*_{KEY}/Block_*/
 ```
 
 Aggregate the merged diff:
 - Combine each `Block_B-{N}/Block_B-{N}-DIFF.md` into a single integration view
-- Note the per-block boundaries (the integration view is the unit /qh-qa reviews; block boundaries inform the "did anything break at the seam?" question)
+- Note the per-block boundaries (the integration view is the unit /{prefix}-qa reviews; block boundaries inform the "did anything break at the seam?" question)
 
 State explicitly what was loaded, in plain language. Name the ticket title, the upstream artifacts confirmed (spec APPROVED, design APPROVED, edge-case-validation VALIDATED), the number of blocks aggregated into the merged diff, the read-only repo + branch, the standards files read.
 
 Do not gate here — Step 0 is informational.
 
 **Refusal checks (all hard stops):**
-- If `edge-case-validation.md` is missing or `Status` is not `VALIDATED`: **STOP** — say "Chain-level Gate 3 was supposed to produce edge-case-validation.md. Route back to /qh-dev to complete chain-level Gate 3 before /qh-qa." Do not proceed.
-- If `state.md` Status is not `DEV_COMPLETE`: **STOP** — say "Implementation incomplete. Run /qh-dev for the remaining block(s) before /qh-qa." Do not proceed.
-- If `spec.md` lacks `Approved` line: **STOP** — route to /qh-spec.
-- If `design.md` lacks `Approved` line: **STOP** — route to /qh-arch.
-- If `[your DEV_DIR]/qh-code-temp/PROPOSED_*_{KEY}/Block_*/` is missing or empty: **STOP** — route to /qh-dev.
+- If `edge-case-validation.md` is missing or `Status` is not `VALIDATED`: **STOP** — say "Chain-level Gate 3 was supposed to produce edge-case-validation.md. Route back to /{prefix}-dev to complete chain-level Gate 3 before /{prefix}-qa." Do not proceed.
+- If `state.md` Status is not `DEV_COMPLETE`: **STOP** — say "Implementation incomplete. Run /{prefix}-dev for the remaining block(s) before /{prefix}-qa." Do not proceed.
+- If `spec.md` lacks `Approved` line: **STOP** — route to /{prefix}-spec.
+- If `design.md` lacks `Approved` line: **STOP** — route to /{prefix}-arch.
+- If `[your DEV_DIR]/{prefix}-code-temp/PROPOSED_*_{KEY}/Block_*/` is missing or empty: **STOP** — route to /{prefix}-dev.
 
 ---
 
 ## Step 1 — Layer 1 internal adversarial review
 
-The core /qh-qa work. Apply the Adversary lens to the merged diff against spec.md AC + VS, design.md, all four standards, and edge-case-validation.md. Produce a findings list with severity AND root-cause-layer classification.
+The core /{prefix}-qa work. Apply the Adversary lens to the merged diff against spec.md AC + VS, design.md, all four standards, and edge-case-validation.md. Produce a findings list with severity AND root-cause-layer classification.
 
 ### Review categories (ten, all required)
 
@@ -84,7 +84,7 @@ For every function, class, variable, parameter, table, column, or file that was 
 ```bash
 grep -rn "[changed name]" [READ_ONLY_REPO_PATH] \
   --include="*.py" --include="*.ipynb" --include="*.yaml" --include="*.yml" --include="*.sql"
-grep -rn "[changed name]" [your DEV_DIR]/qh-code-temp/PROPOSED_*_{KEY}/
+grep -rn "[changed name]" [your DEV_DIR]/{prefix}-code-temp/PROPOSED_*_{KEY}/
 ```
 
 For each hit verify:
@@ -171,7 +171,7 @@ Per pipeline-standards.md Rule 8.
 #### 9. Documentation sync
 
 - Vault state.md updated for the new Status
-- Vault design.md unchanged unless impl revealed a gap (which routes to /qh-arch, not patched here)
+- Vault design.md unchanged unless impl revealed a gap (which routes to /{prefix}-arch, not patched here)
 - File headers present on every modified file (DJP author, date, version, ticket, change log) — technical-standards.md Rule 10
 - Databricks Learning vault note added if a new platform concept was used
 - No stale references to old table names, columns, or removed logic
@@ -200,7 +200,7 @@ For every CRITICAL/HIGH/MEDIUM finding, classify where the root cause lives:
 | **DEV** | Impl bug. Code is wrong given right spec + right design. Wrong column name, wrong null handling, missing type hint, function too long, hallucinated API. |
 | **ARCH** | Design gap. Impl matches design but design is wrong. Wrong write mode, wrong join type, wrong layer boundary, missing idempotency mechanism, threat-model gap. |
 | **SPEC** | Requirement miss. Impl matches design + spec but spec is wrong. AC missed a case, VS missed a scenario, requirement contradicted reality. |
-| **SUPPORT** | Diagnosis gap. Original ticket diagnosed wrong root cause. Rare — means /qh-support's diagnosis missed the actual problem. |
+| **SUPPORT** | Diagnosis gap. Original ticket diagnosed wrong root cause. Rare — means /{prefix}-support's diagnosis missed the actual problem. |
 
 Layer-routing happens at Step 3 — Layer 1 just classifies. Disagreements between L1 and Cursor on root-cause-layer get adjudicated by {NAME} at Gate 2.
 
@@ -254,7 +254,7 @@ Do not proceed to Step 2 without {NAME}'s explain-back.
 
 If Gate 1 surfaced any PHI finding in the diff (hardcoded patient values, real test data, MRN/DOB/encounter ID in comments or logs), **STOP** — do not send the contaminated diff to Cursor. Cursor is an external LLM provider; sending PHI there is itself a leakage event per CLAUDE.md Rule 11 and technical-standards.md Rule 1-2.
 
-Route the PHI finding back to /qh-dev for sanitization. Re-run /qh-qa from Step 0 after the sanitized DIFF is applied.
+Route the PHI finding back to /{prefix}-dev for sanitization. Re-run /{prefix}-qa from Step 0 after the sanitized DIFF is applied.
 
 ### Cursor handoff prompt
 
@@ -264,7 +264,7 @@ Produce a focused prompt for {NAME} to paste into Cursor. Cursor must see the sa
 Act as an adversary. Find what will go wrong with this implementation.
 
 Inputs:
-- Merged diff: [your DEV_DIR]/qh-code-temp/PROPOSED_{YYYY-MM-DD}_{KEY}/Block_*/Block_B-*-DIFF.md
+- Merged diff: [your DEV_DIR]/{prefix}-code-temp/PROPOSED_{YYYY-MM-DD}_{KEY}/Block_*/Block_B-*-DIFF.md
 - Spec: 02-tickets/{KEY}/{KEY}-spec.md (Status APPROVED)
 - Design: 02-tickets/{KEY}/{KEY}-design.md (Status APPROVED)
 - Edge-case validation: 02-tickets/{KEY}/{KEY}-edge-case-validation.md (Status VALIDATED)
@@ -293,8 +293,8 @@ For each finding return:
 - why (the consequence)
 - fix-path (specific action — but do not implement)
 
-Return your independent findings list. Do NOT ask /qh-qa for guidance.
-Do NOT see /qh-qa's Layer 1 findings.
+Return your independent findings list. Do NOT ask /{prefix}-qa for guidance.
+Do NOT see /{prefix}-qa's Layer 1 findings.
 ```
 
 Tell {NAME}:
@@ -305,7 +305,7 @@ Wait for {NAME} to paste Cursor's response.
 
 ### Receive Cursor findings
 
-Once {NAME} pastes Cursor's response, normalize Cursor's findings into the same shape as L1 findings (file:line + severity + what + why + fix-path + root-cause-layer). Severity grades assigned by /qh-qa, not by Cursor — Cursor's labels are inputs, not decisions.
+Once {NAME} pastes Cursor's response, normalize Cursor's findings into the same shape as L1 findings (file:line + severity + what + why + fix-path + root-cause-layer). Severity grades assigned by /{prefix}-qa, not by Cursor — Cursor's labels are inputs, not decisions.
 
 Reconciliation classes:
 - **L1-only** — Layer 1 caught, Cursor missed
@@ -324,7 +324,7 @@ RECONCILIATION — {KEY}
 Round: N
 
 L1-only ({N})       [Layer 1 caught, Cursor missed]
-L2-only ({N})       [Cursor caught, Layer 1 missed — severity assigned by /qh-qa]
+L2-only ({N})       [Cursor caught, Layer 1 missed — severity assigned by /{prefix}-qa]
 Both-found ({N})    [Merged; severity = higher of L1, L2]
 Disagreements ({N}) [L1 says A, L2 says not-A — {NAME} adjudicates]
 
@@ -357,10 +357,10 @@ For every CRITICAL / HIGH / MEDIUM finding, produce a routing slip:
 
 | Root cause | Routes to | Next-step prompt |
 |---|---|---|
-| **DEV** | /qh-dev | Patch to last block, or new block per design.md Work-Block Plan + {NAME}'s call |
-| **ARCH** | /qh-arch | Re-design needed. Cascades through /qh-dev rebuild |
-| **SPEC** | /qh-spec | Re-spec needed. Cascades through /qh-arch and /qh-dev |
-| **SUPPORT** | /qh-support | Re-diagnose. Rare — original ticket misdiagnosed |
+| **DEV** | /{prefix}-dev | Patch to last block, or new block per design.md Work-Block Plan + {NAME}'s call |
+| **ARCH** | /{prefix}-arch | Re-design needed. Cascades through /{prefix}-dev rebuild |
+| **SPEC** | /{prefix}-spec | Re-spec needed. Cascades through /{prefix}-arch and /{prefix}-dev |
+| **SUPPORT** | /{prefix}-support | Re-diagnose. Rare — original ticket misdiagnosed |
 
 LOW findings: default defer. {NAME} may promote to in-session.
 MEDIUM findings: fix in session before merge per memory `feedback_qa_medium_fix_in_session`.
@@ -371,10 +371,10 @@ Produce the routing summary:
 ROUTING — {KEY}
 Round: N
 
-To /qh-dev    ({N} findings — DEV-rooted)
-To /qh-arch   ({N} findings — ARCH-rooted)
-To /qh-spec   ({N} findings — SPEC-rooted)
-To /qh-support ({N} findings — SUPPORT-rooted)
+To /{prefix}-dev    ({N} findings — DEV-rooted)
+To /{prefix}-arch   ({N} findings — ARCH-rooted)
+To /{prefix}-spec   ({N} findings — SPEC-rooted)
+To /{prefix}-support ({N} findings — SUPPORT-rooted)
 In-session    ({N} MEDIUM findings — fix before merge)
 Deferred      ({N} LOW findings)
 ```
@@ -431,11 +431,11 @@ Scan ten artifact surfaces — broader than Layer 1's diff review. Layer 1 cover
 | 3 | Code comments and docstrings | No real patient IDs, MRNs, DOBs, or encounter IDs as examples |
 | 4 | Commit message draft | No patient-specific language (no "patient John Doe's MRN was 12345...") |
 | 5 | Vault writes from this skill run | 02-tickets/{KEY}/* artifacts — state.md, qa-findings.md, edge-case-validation.md must not contain real patient values |
-| 6 | ~/qh-output/ archive entries | Session log entries for this work — no PHI in archive |
-| 7 | Notion drafts | ~/qh-output/notion-drafts/ — any chain artifact destined for Notion must be PHI-clean |
+| 6 | ${PREFIX_UPPER}_KNOWLEDGE/output/ archive entries | Session log entries for this work — no PHI in archive |
+| 7 | Notion drafts | ${PREFIX_UPPER}_KNOWLEDGE/output/notion-drafts/ — any chain artifact destined for Notion must be PHI-clean |
 | 8 | Cursor handoff prompt artifact | Confirm the prompt sent to Cursor in Step 2 contained no PHI — retroactive verification of the Step 2 hard rule |
 | 9 | Jira comment draft (from Step 5 below) | Draft must contain no patient-specific values — counts, percentages, shape descriptors only |
-| 10 | Chat output (this skill run) | No PHI in any displayed text Claude produced during this /qh-qa run |
+| 10 | Chat output (this skill run) | No PHI in any displayed text Claude produced during this /{prefix}-qa run |
 
 For each surface mark CLEAN or FINDING. Any FINDING is auto-CRITICAL.
 
@@ -489,7 +489,7 @@ Then state:
 
 Wait for {NAME}'s explain-back.
 
-If COMPLIANCE BLOCKED: any finding here blocks merge regardless of prior gates. Route to /qh-dev for impl sanitization, or to upstream skill if the leakage roots in design/spec (e.g., spec required logging a field that contains PHI — routes to /qh-spec).
+If COMPLIANCE BLOCKED: any finding here blocks merge regardless of prior gates. Route to /{prefix}-dev for impl sanitization, or to upstream skill if the leakage roots in design/spec (e.g., spec required logging a field that contains PHI — routes to /{prefix}-spec).
 
 Do not proceed to Step 5 without {NAME}'s explain-back.
 
@@ -541,7 +541,7 @@ status: QA_APPROVED | QA_BLOCKED
 [same structure for HIGH / MEDIUM / LOW]
 
 ## Layer 2 (Cursor) findings (independent)
-[Cursor's findings, severity assigned by /qh-qa, same structure]
+[Cursor's findings, severity assigned by /{prefix}-qa, same structure]
 
 ## Reconciliation
 | Finding ID | L1 | L2 | Combined severity | Root cause | Routes to |
@@ -566,7 +566,7 @@ Q4 Did we do enough? (gaps + residual risk)
 | Code comments + docstrings | CLEAN / FINDING | ... |
 | Commit message draft | CLEAN / FINDING | ... |
 | Vault writes (02-tickets/{KEY}/*) | CLEAN / FINDING | ... |
-| ~/qh-output/ archive entries | CLEAN / FINDING | ... |
+| ${PREFIX_UPPER}_KNOWLEDGE/output/ archive entries | CLEAN / FINDING | ... |
 | Notion drafts | CLEAN / FINDING | ... |
 | Cursor handoff prompt artifact | CLEAN / FINDING | ... |
 | Jira comment draft | CLEAN / FINDING | ... |
@@ -576,15 +576,15 @@ Q4 Did we do enough? (gaps + residual risk)
 COMPLIANCE PASS | COMPLIANCE BLOCKED — N CRITICAL PHI leakage, N Shostack-derived finding(s)
 
 ## Routing slips
-- To /qh-dev: [DEV-rooted findings + any Compliance-Gate impl sanitization]
-- To /qh-arch: [ARCH-rooted findings]
-- To /qh-spec: [SPEC-rooted findings]
-- To /qh-support: [SUPPORT-rooted findings, rare]
+- To /{prefix}-dev: [DEV-rooted findings + any Compliance-Gate impl sanitization]
+- To /{prefix}-arch: [ARCH-rooted findings]
+- To /{prefix}-spec: [SPEC-rooted findings]
+- To /{prefix}-support: [SUPPORT-rooted findings, rare]
 
 ## Verdict
 APPROVED — zero CRITICAL, zero HIGH, Compliance Gate PASS. M MEDIUM findings closed in session. Ready for merge.
 or
-BLOCKED — N CRITICAL, N HIGH (and/or Compliance Gate BLOCKED). Routes to {/qh-dev | /qh-arch | /qh-spec | /qh-support}.
+BLOCKED — N CRITICAL, N HIGH (and/or Compliance Gate BLOCKED). Routes to {/{prefix}-dev | /{prefix}-arch | /{prefix}-spec | /{prefix}-support}.
 
 ## Checklist
 End-to-end impact scan:  PASS / FAIL (N issues)
@@ -621,7 +621,7 @@ QA verdict: APPROVED | BLOCKED
 Findings: N CRITICAL, N HIGH, N MEDIUM, N LOW
 Routing: {DEV: N, ARCH: N, SPEC: N, SUPPORT: N}
 Compliance Gate: PASS | BLOCKED
-Next skill: /qh-dev | /qh-arch | /qh-spec | /qh-support | /close
+Next skill: /{prefix}-dev | /{prefix}-arch | /{prefix}-spec | /{prefix}-support | /close
 ```
 
 ### Draft Jira comment
@@ -644,48 +644,48 @@ No auto-chain. Print one of the following per the verdict + routing.
 APPROVED case:
   /close {KEY}
 
-  /qh-qa APPROVED {YYYY-MM-DD} (Round {N}). Zero CRITICAL, zero HIGH.
+  /{prefix}-qa APPROVED {YYYY-MM-DD} (Round {N}). Zero CRITICAL, zero HIGH.
   All MEDIUM findings closed in session. Compliance Gate PASS.
   Implementation ready for commit + PR. Apply DIFFs from
-  [your DEV_DIR]/qh-code-temp/PROPOSED_{DATE}_{KEY}/ to the read-only repo
+  [your DEV_DIR]/{prefix}-code-temp/PROPOSED_{DATE}_{KEY}/ to the read-only repo
   manually. Commit format: DJP | {KEY} | imperative summary.
 
 BLOCKED with DEV findings:
-  /qh-dev {KEY}
+  /{prefix}-dev {KEY}
 
-  /qh-qa BLOCKED {YYYY-MM-DD} (Round {N}). {N} CRITICAL, {N} HIGH.
+  /{prefix}-qa BLOCKED {YYYY-MM-DD} (Round {N}). {N} CRITICAL, {N} HIGH.
   All DEV-rooted findings at 02-tickets/{KEY}/{KEY}-qa-findings.md.
   Apply as patch to last block or new block per design.md Work-Block Plan.
-  Re-run /qh-qa after the patch block applied.
+  Re-run /{prefix}-qa after the patch block applied.
 
 BLOCKED with ARCH findings:
-  /qh-arch {KEY}
+  /{prefix}-arch {KEY}
 
-  /qh-qa BLOCKED {YYYY-MM-DD} (Round {N}). {N} HIGH design gaps.
+  /{prefix}-qa BLOCKED {YYYY-MM-DD} (Round {N}). {N} HIGH design gaps.
   Re-design needed. Findings at 02-tickets/{KEY}/{KEY}-qa-findings.md.
-  Re-approve design.md → re-run /qh-dev block(s) → re-run /qh-qa.
+  Re-approve design.md → re-run /{prefix}-dev block(s) → re-run /{prefix}-qa.
 
 BLOCKED with SPEC findings:
-  /qh-spec {KEY}
+  /{prefix}-spec {KEY}
 
-  /qh-qa BLOCKED {YYYY-MM-DD} (Round {N}). {N} HIGH requirement misses.
+  /{prefix}-qa BLOCKED {YYYY-MM-DD} (Round {N}). {N} HIGH requirement misses.
   Re-spec needed. Findings at 02-tickets/{KEY}/{KEY}-qa-findings.md.
-  Re-approve spec.md → re-run /qh-arch → /qh-dev → /qh-qa.
+  Re-approve spec.md → re-run /{prefix}-arch → /{prefix}-dev → /{prefix}-qa.
 
 BLOCKED with SUPPORT findings:
-  /qh-support {KEY}
+  /{prefix}-support {KEY}
 
-  /qh-qa BLOCKED {YYYY-MM-DD} (Round {N}). Diagnosis from /qh-support
+  /{prefix}-qa BLOCKED {YYYY-MM-DD} (Round {N}). Diagnosis from /{prefix}-support
   missed root cause. Re-diagnose needed. Findings at
   02-tickets/{KEY}/{KEY}-qa-findings.md. Cascades through the chain.
 
 COMPLIANCE BLOCKED (any leakage finding):
-  /qh-dev {KEY}
+  /{prefix}-dev {KEY}
 
-  /qh-qa COMPLIANCE BLOCKED {YYYY-MM-DD} (Round {N}). PHI leakage
+  /{prefix}-qa COMPLIANCE BLOCKED {YYYY-MM-DD} (Round {N}). PHI leakage
   detected at [surface(s)]. Sanitize before merge. Compliance Gate
   CRITICAL findings at 02-tickets/{KEY}/{KEY}-qa-findings.md.
-  Re-run /qh-qa from Step 0 after sanitized DIFF applied.
+  Re-run /{prefix}-qa from Step 0 after sanitized DIFF applied.
 ```
 
 Per memory `feedback_stop_and_starter_pattern`. No skill continues in the same thread.
@@ -709,31 +709,31 @@ Standards-anchored, not subjective. Apply this table to every finding:
 
 ## Refusal Rules
 
-/qh-qa refuses to run when:
+/{prefix}-qa refuses to run when:
 
 | Condition | Refusal action |
 |---|---|
-| `spec.md` is not APPROVED | Route to /qh-spec — "spec is not approved" |
-| `design.md` is not APPROVED | Route to /qh-arch — "design is not approved" |
-| `edge-case-validation.md` is missing or not VALIDATED | Route to /qh-dev — "chain-level Gate 3 must complete first" |
-| `state.md` Status is not DEV_COMPLETE | Route to /qh-dev — "implementation incomplete" |
-| `[your DEV_DIR]/qh-code-temp/PROPOSED_*_{KEY}/Block_*/` is missing or empty | Route to /qh-dev — "no proposed diff to review" |
+| `spec.md` is not APPROVED | Route to /{prefix}-spec — "spec is not approved" |
+| `design.md` is not APPROVED | Route to /{prefix}-arch — "design is not approved" |
+| `edge-case-validation.md` is missing or not VALIDATED | Route to /{prefix}-dev — "chain-level Gate 3 must complete first" |
+| `state.md` Status is not DEV_COMPLETE | Route to /{prefix}-dev — "implementation incomplete" |
+| `[your DEV_DIR]/{prefix}-code-temp/PROPOSED_*_{KEY}/Block_*/` is missing or empty | Route to /{prefix}-dev — "no proposed diff to review" |
 
 Hard rules that fire during execution:
 
-- /qh-qa never fixes findings — that is /qh-dev's job
-- /qh-qa never approves with CRITICAL or HIGH outstanding
-- /qh-qa never lets Cursor's clean pass override a Layer 1 finding
-- /qh-qa never sends a PHI-contaminated artifact to Cursor (Step 2 pre-check)
-- /qh-qa never approves when the Compliance Gate fires CRITICAL
-- /qh-qa never collapses Layer 1 + Layer 2 into one review — independence is the safeguard
-- /qh-qa never skips a Compliance Gate surface because "we already covered it"
+- /{prefix}-qa never fixes findings — that is /{prefix}-dev's job
+- /{prefix}-qa never approves with CRITICAL or HIGH outstanding
+- /{prefix}-qa never lets Cursor's clean pass override a Layer 1 finding
+- /{prefix}-qa never sends a PHI-contaminated artifact to Cursor (Step 2 pre-check)
+- /{prefix}-qa never approves when the Compliance Gate fires CRITICAL
+- /{prefix}-qa never collapses Layer 1 + Layer 2 into one review — independence is the safeguard
+- /{prefix}-qa never skips a Compliance Gate surface because "we already covered it"
 
 ---
 
 ## Re-review (rounds)
 
-When /qh-dev addresses findings and re-runs /qh-qa:
+When /{prefix}-dev addresses findings and re-runs /{prefix}-qa:
 
 - Start fresh — re-read spec.md, design.md, edge-case-validation.md, the latest merged diff
 - Round counter increments (`Round 1 → Round 2` in qa-findings.md)
@@ -747,21 +747,21 @@ Track rounds in state.md and qa-findings.md. The post-Tier-5 standards audit wat
 
 ## Measurement
 
-CRITICAL + HIGH findings per ticket trends to zero over a 4-ticket rolling window. Recorded at /close in session log entries. Feeds the post-Tier-5 standards audit (per memory `project_standards_audit_after_skills`) — trend flat or up means upstream skills (Spec/Arch/Dev) need hardening. The trend is the signal /qh-qa is doing its job.
+CRITICAL + HIGH findings per ticket trends to zero over a 4-ticket rolling window. Recorded at /close in session log entries. Feeds the post-Tier-5 standards audit (per memory `project_standards_audit_after_skills`) — trend flat or up means upstream skills (Spec/Arch/Dev) need hardening. The trend is the signal /{prefix}-qa is doing its job.
 
 ---
 
-## What Never Lives in /qh-qa
+## What Never Lives in /{prefix}-qa
 
 | Concern | Where it lives |
 |---|---|
-| Fixing findings | /qh-dev (impl), /qh-arch (design), /qh-spec (requirements), /qh-support (diagnosis) |
-| Re-running scenarios from edge-case-validation.md | /qh-dev chain-level Gate 3 produces the validation; /qh-qa reads it |
-| Per-block Cursor review of DIFFs | /qh-dev runs Cursor per block; /qh-qa runs Cursor on the integration view |
-| Threat modeling at design time | /qh-arch does this at design time and writes design.md; /qh-qa verifies it operationally |
-| Schema design changes | /qh-arch — surfaced as ARCH-rooted findings, routes back |
-| Commit message decisions | {NAME} — /qh-qa drafts the Jira comment, not the commit message |
-| Posting to Jira | {NAME} — /qh-qa drafts only per memory `feedback_jira_draft_only` |
+| Fixing findings | /{prefix}-dev (impl), /{prefix}-arch (design), /{prefix}-spec (requirements), /{prefix}-support (diagnosis) |
+| Re-running scenarios from edge-case-validation.md | /{prefix}-dev chain-level Gate 3 produces the validation; /{prefix}-qa reads it |
+| Per-block Cursor review of DIFFs | /{prefix}-dev runs Cursor per block; /{prefix}-qa runs Cursor on the integration view |
+| Threat modeling at design time | /{prefix}-arch does this at design time and writes design.md; /{prefix}-qa verifies it operationally |
+| Schema design changes | /{prefix}-arch — surfaced as ARCH-rooted findings, routes back |
+| Commit message decisions | {NAME} — /{prefix}-qa drafts the Jira comment, not the commit message |
+| Posting to Jira | {NAME} — /{prefix}-qa drafts only per memory `feedback_jira_draft_only` |
 
 ---
 

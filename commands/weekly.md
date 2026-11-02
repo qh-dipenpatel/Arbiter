@@ -2,7 +2,7 @@
 
 **Role:** Surface what moved last Mon–Fri across all clients (or one client). Three output layers: signal list, product translation, pushback prep. Book-backed narrative.
 
-**Vault:** `$QH_KNOWLEDGE/`
+**Vault:** `${PREFIX_UPPER}_KNOWLEDGE/`
 
 ---
 

@@ -1,6 +1,6 @@
-# /qh-support — Support Department (Diagnostician)
+# /{prefix}-support — Support Department (Diagnostician)
 
-**Role:** Diagnostician. Find what is actually wrong and why. Trace the failure through every system layer the data passes through. Route the ticket: Tier 1 close, Tier 2 to /qh-spec, or Enhancement to /whiteboard.
+**Role:** Diagnostician. Find what is actually wrong and why. Trace the failure through every system layer the data passes through. Route the ticket: Tier 1 close, Tier 2 to /{prefix}-spec, or Enhancement to /whiteboard.
 
 **Mindset:** Diagnostic reasoning, verification before commitment, second-order effects. The skill guards against two failure modes: anchoring on the first plausible cause, and stopping when one blocker is found if more exist.
 
@@ -12,17 +12,17 @@
 - `claude-dotfiles/standards/technical-standards.md` — cross-cutting rules
 - `claude-dotfiles/standards/pipeline-standards.md` — pipeline architecture
 
-**Vault:** `$QH_KNOWLEDGE/`
+**Vault:** `${PREFIX_UPPER}_KNOWLEDGE/`
 
 ---
 
 ## Trigger
 
 ```
-/qh-support [JIRA-ID]
+/{prefix}-support [JIRA-ID]
 ```
 
-Called by `/qh-ticket` or directly. The argument is the Jira key. No mode flag — the skill triages routing in Step 3.
+Called by `/{prefix}-ticket` or directly. The argument is the Jira key. No mode flag — the skill triages routing in Step 3.
 
 ---
 
@@ -182,7 +182,7 @@ Determine the route based on what the TROUBLESHOOT actually found.
 - Root cause is operational, not design
 - Resolution can be expressed as a sequence of commands {NAME} runs
 
-**Tier 2 — Bug to /qh-spec.** All of:
+**Tier 2 — Bug to /{prefix}-spec.** All of:
 - Code or pipeline change needed
 - Root cause confirmed in the pipeline logic, schema, or transformation
 - The fix requires spec → arch → dev discipline
@@ -199,7 +199,7 @@ If criteria are ambiguous between routes, default to Tier 2 (bug) and explain wh
 ```
 TRIAGE — [KEY]
 
-Proposed route:   [Tier 1 close | Tier 2 to /qh-spec | Enhancement to /whiteboard]
+Proposed route:   [Tier 1 close | Tier 2 to /{prefix}-spec | Enhancement to /whiteboard]
 Why this route:   [one paragraph naming the criteria that matched]
 Why not others:   [one sentence per alternative route, naming what disqualified it]
 ```
@@ -248,24 +248,24 @@ Status: RESOLVED_TIER_1
 [How to confirm resolution worked — specific check {NAME} runs]
 
 ## Why No Code Change
-[One paragraph — the operational nature of the cause and why /qh-spec is not needed]
+[One paragraph — the operational nature of the cause and why /{prefix}-spec is not needed]
 ```
 
 Update `02-tickets/{KEY}/{KEY}-state.md`:
 - Status: RESOLVED_TIER_1
 - Next skill: none (closed at Support)
 
-Write session log to `02-tickets/{KEY}/{KEY}-session-YYYY-MM-DD.md` and append to `~/qh-output/{KEY}/YYYY-MM-DD.md`. Both — never one. See Skill Standard Rule 13.
+Write session log to `02-tickets/{KEY}/{KEY}-session-YYYY-MM-DD.md` and append to `${PREFIX_UPPER}_KNOWLEDGE/output/{KEY}/YYYY-MM-DD.md`. Both — never one. See Skill Standard Rule 13.
 
 End output:
 
 ```
-Tier 1 resolution written. Execute the steps in {KEY}-resolution.md. No /qh-spec needed.
+Tier 1 resolution written. Execute the steps in {KEY}-resolution.md. No /{prefix}-spec needed.
 ```
 
 The skill stops. {NAME} executes the resolution manually per Technical Standards Rule 24 (never auto-commit, never auto-execute).
 
-### Tier 2 — Bug to /qh-spec
+### Tier 2 — Bug to /{prefix}-spec
 
 Write `02-tickets/{KEY}/{KEY}-support-handoff.md`:
 
@@ -299,7 +299,7 @@ Option B: [name] — [one sentence]
 Option C: [name] — [one sentence, if applicable]
 
 ## Open Unknowns
-[What /qh-spec or /qh-arch will need to resolve]
+[What /{prefix}-spec or /{prefix}-arch will need to resolve]
 
 ## Risks
 [What could go wrong with any fix — regression, coverage loss, client impact]
@@ -311,14 +311,14 @@ Option C: [name] — [one sentence, if applicable]
 
 Update `02-tickets/{KEY}/{KEY}-state.md`:
 - Status: SUPPORT_COMPLETE
-- Next skill: /qh-spec
+- Next skill: /{prefix}-spec
 - Root cause: [one line]
 
 Write session log and output archive (both — Skill Standard Rule 13).
 
-### Stop and hand off to /qh-spec (next thread)
+### Stop and hand off to /{prefix}-spec (next thread)
 
-Do not auto-chain. Support handoffs can be substantial (multi-layer trace, evidence, multiple fix options). Chaining into /qh-spec in the same thread burns the cache window with no benefit. Start /qh-spec in a fresh thread.
+Do not auto-chain. Support handoffs can be substantial (multi-layer trace, evidence, multiple fix options). Chaining into /{prefix}-spec in the same thread burns the cache window with no benefit. Start /{prefix}-spec in a fresh thread.
 
 End output:
 
@@ -326,26 +326,26 @@ End output:
 Handoff written: 02-tickets/{KEY}/{KEY}-support-handoff.md
 Status: SUPPORT_COMPLETE
 
-Chain step complete. Start a fresh thread for /qh-spec to keep context lean.
+Chain step complete. Start a fresh thread for /{prefix}-spec to keep context lean.
 
 ═══════════════════════════════════════════════════════════════
 Next session starter prompt (copy into a new thread):
 ═══════════════════════════════════════════════════════════════
 
-/qh-spec {KEY}
+/{prefix}-spec {KEY}
 
 Support handoff is at 02-tickets/{KEY}/{KEY}-support-handoff.md (Status: SUPPORT_COMPLETE).
-/qh-spec reads the handoff and the four standards docs at claude-dotfiles/.
+/{prefix}-spec reads the handoff and the four standards docs at claude-dotfiles/.
 Produces the ticket-closure contract (AC) and empirical validation scenarios (VS).
-Four gates: RESTATE / REQUIREMENTS+AC / VS / explain-back before /qh-arch.
+Four gates: RESTATE / REQUIREMENTS+AC / VS / explain-back before /{prefix}-arch.
 
 Root cause confirmed: [one-line from handoff].
-Fix options named (for /qh-arch): see handoff Fix Options section.
+Fix options named (for /{prefix}-arch): see handoff Fix Options section.
 
 ═══════════════════════════════════════════════════════════════
 ```
 
-The skill stops here. {NAME} copies the starter prompt into a new thread to begin /qh-spec.
+The skill stops here. {NAME} copies the starter prompt into a new thread to begin /{prefix}-spec.
 
 ### Enhancement to /whiteboard
 
@@ -387,7 +387,7 @@ The skill stops. Whiteboard is a separate human-driven decision; it does not aut
 
 ## Rules
 
-- No fix design — name options only, leave design to /qh-spec and /qh-arch.
+- No fix design — name options only, leave design to /{prefix}-spec and /{prefix}-arch.
 - No code changes, no commits, no auto-execution. Read-only on all systems.
 - No PHI in any artifact open-text fields. Evidence section MRNs only, under the internal-use-only marker. See Technical Standards Rule 1.
 - Read schema files in the vault before pipeline code — know what the source provides before blaming the code.

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -128,14 +129,52 @@ class FailureModes(unittest.TestCase):
         code, out = run_hook("pre-tool-write-scan-phi.py", {"tool_name": "Write", "tool_input": None})
         self.assertEqual((code, out), (0, None))
 
-    def test_bash_phi_hook_fails_open(self) -> None:
-        code, out = run_hook("pre-tool-bash-scan-phi.py", "not json")
-        self.assertEqual((code, out), (0, None))
-
     def test_clean_results_are_silent(self) -> None:
         for hook in ("post-tool-result-scan-phi.py", "post-tool-bash-scan-secrets.py"):
             code, out = run_hook(hook, {"tool_name": "Bash", "tool_response": bash_response("hello")})
             self.assertEqual((code, out), (0, None), hook)
+
+
+class BashPhiHook(unittest.TestCase):
+    """pre-tool-bash-scan-phi.py: fails closed, scans command text only."""
+
+    HOOK = "pre-tool-bash-scan-phi.py"
+
+    def decision(self, payload: object) -> str | None:
+        code, out = run_hook(self.HOOK, payload)
+        self.assertEqual(code, 0)
+        return out["hookSpecificOutput"]["permissionDecision"] if out else None
+
+    def test_internal_error_blocks_on_bad_json(self) -> None:
+        code, out = run_hook(self.HOOK, "not json")
+        self.assertEqual(code, 0)
+        spec = out["hookSpecificOutput"]
+        self.assertEqual((spec["hookEventName"], spec["permissionDecision"]), ("PreToolUse", "deny"))
+        self.assertIn("internal error", spec["permissionDecisionReason"])
+
+    def test_internal_error_blocks_on_missing_pattern_module(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            lone = os.path.join(tmp, self.HOOK)
+            shutil.copy(os.path.join(HOOKS, self.HOOK), lone)
+            proc = subprocess.run([sys.executable, lone], input=json.dumps(
+                {"tool_name": "Bash", "tool_input": {"command": "ls"}}), capture_output=True, text=True)
+        out = json.loads(proc.stdout)
+        self.assertEqual(out["hookSpecificOutput"]["permissionDecision"], "deny")
+
+    def test_phi_in_command_blocks(self) -> None:
+        payload = {"tool_name": "Bash", "tool_input": {"command": f'echo "{FAKE_MRN}" > out.txt'}}
+        self.assertEqual(self.decision(payload), "deny")
+
+    def test_clean_command_passes(self) -> None:
+        payload = {"tool_name": "Bash", "tool_input": {"command": "ls -la /tmp"}}
+        self.assertIsNone(self.decision(payload))
+
+    def test_known_limit_script_writing_phi_is_not_caught(self) -> None:
+        """KNOWN LIMIT: only command text is scanned. A script that builds PHI at run time
+        passes, because the PHI never appears in the command text. If this test starts
+        failing, the limit has been lifted: update docs/hooks.md."""
+        command = "python3 gen.py --out out.csv"
+        self.assertIsNone(self.decision({"tool_name": "Bash", "tool_input": {"command": command}}))
 
 
 class Detection(unittest.TestCase):

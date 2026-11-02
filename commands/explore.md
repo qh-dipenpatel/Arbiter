@@ -3,7 +3,7 @@
 **Role:** Synthesize knowledge from Confluence + Git + Slack (if available) into the vault.
 Primary skill for the learning phase. Run on any topic, client, pipeline, or system area.
 
-**Vault:** `$QH_KNOWLEDGE/`
+**Vault:** `${PREFIX_UPPER}_KNOWLEDGE/`
 
 ---
 
@@ -30,7 +30,7 @@ State:
 
 Use an Explore subagent for deep codebase/doc searches to protect the main context window.
 
-**Vault (read first):** Read relevant files in `$QH_KNOWLEDGE/` directly before any external source. Check `01-system-map/` for existing docs, `02-tickets/` for prior ticket work, and `03-knowledge-base/` for decisions and patterns. Identify vault files to update rather than create new. Focus external reads on gaps not already documented.
+**Vault (read first):** Read relevant files in `${PREFIX_UPPER}_KNOWLEDGE/` directly before any external source. Check `01-system-map/` for existing docs, `02-tickets/` for prior ticket work, and `03-knowledge-base/` for decisions and patterns. Identify vault files to update rather than create new. Focus external reads on gaps not already documented.
 
 **Confluence** — search for existing docs on the topic:
 - Use `mcp__atlassian__searchConfluenceUsingCql` or `searchAtlassian`
@@ -148,7 +148,7 @@ Report exactly which files were created or updated with full paths.
 - [question] — who might know, where to look
 
 **Suggested next skill:**
-- Ready to act → suggest `/ticket [ID]` or `/qh-arch [ID]`
+- Ready to act → suggest `/ticket [ID]` or `/{prefix}-arch [ID]`
 - More to learn → suggest `/explore [next topic]`
 - Meeting notes to process → handle them in this session
 

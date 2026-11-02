@@ -48,6 +48,33 @@
             "command": "\"$CLAUDE_DOTFILES/hooks/pre-tool-bash-databricks-ask.py\""
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_DOTFILES/hooks/pre-tool-bash-guard-code-dir.py\""
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_DOTFILES/hooks/pre-tool-bash-gate-pr-create.py\""
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_DOTFILES/hooks/pre-tool-write-require-read.py\""
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -64,6 +91,15 @@
           {
             "type": "command",
             "command": "\"$CLAUDE_DOTFILES/hooks/post-tool-result-scan-phi.py\""
+          }
+        ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_DOTFILES/hooks/post-tool-read-record.py\""
           }
         ]
       }
@@ -90,10 +126,10 @@
       "Bash(git diff:*)",
       "Bash(date)",
       "Bash(find $ARBITER_KNOWLEDGE/**)",
-      "Bash(find $QH_SCRIPTS/**)",
+      "Bash(find $ARBITER_SCRIPTS/**)",
       "Bash(python3 $CLAUDE_DOTFILES/rag/query_index.py:*)",
       "Read($ARBITER_KNOWLEDGE/**)",
-      "Read($QH_SCRIPTS/**)",
+      "Read($ARBITER_SCRIPTS/**)",
       "Read($CLAUDE_DOTFILES/**)"
     ],
     "additionalDirectories": []

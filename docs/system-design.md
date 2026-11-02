@@ -78,18 +78,18 @@ Three things live in the vault that cannot live anywhere else:
 
 This is the mechanism that makes the chain work.
 
-When `/{prefix}-ticket CD-200` finishes, it writes a state file:
+When `/{prefix}-ticket DI-200` finishes, it writes a state file:
 
 ```
-02-tickets/CD-200/CD-200-state.md
+02-tickets/DI-200/DI-200-state.md
 ```
 
-That file contains: status, what was confirmed, what is unknown, what is assumed, and what skill runs next. When `/{prefix}-support CD-200` starts, it reads this file as Step 0. It knows exactly what the ticket coordinator found. It does not read Jira from scratch. It does not ask you to recap.
+That file contains: status, what was confirmed, what is unknown, what is assumed, and what skill runs next. When `/{prefix}-support DI-200` starts, it reads this file as Step 0. It knows exactly what the ticket coordinator found. It does not read Jira from scratch. It does not ask you to recap.
 
 When `/{prefix}-support` finishes, it updates the state file and writes a handoff document:
 
 ```
-02-tickets/CD-200/CD-200-support-handoff.md
+02-tickets/DI-200/DI-200-support-handoff.md
 ```
 
 `/{prefix}-spec` reads the handoff. Not the Jira ticket. The handoff.

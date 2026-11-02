@@ -3,7 +3,7 @@
 **Role:** Capture what happened, compound knowledge, update the system, close the loop.
 Run at the end of every work block — even short ones.
 
-**Vault:** `$QH_KNOWLEDGE/`
+**Vault:** `${PREFIX_UPPER}_KNOWLEDGE/`
 **Dotfiles:** `$CLAUDE_DOTFILES/`
 
 ---
@@ -62,7 +62,7 @@ date
 
 **Run cost tracker:**
 ```bash
-python3 $QH_SCRIPTS/session_cost.py \
+python3 ${PREFIX_UPPER}_SCRIPTS/session_cost.py \
   --mode=close --tasks "[one-line tasks summary]"
 ```
 
@@ -203,7 +203,7 @@ Also draft a pointer line for `MEMORY.md`. Do not write yet.
 
 ## Step 5 — Health (Item 5)
 
-Check that `$QH_KNOWLEDGE` is accessible and the vault state at session open was clean. No script required. Template placeholder links (`[[wiki links]]`, `[[filename]]`) can be ignored.
+Check that `${PREFIX_UPPER}_KNOWLEDGE` is accessible and the vault state at session open was clean. No script required. Template placeholder links (`[[wiki links]]`, `[[filename]]`) can be ignored.
 
 ---
 
@@ -259,22 +259,22 @@ to confirm the working tree is clean.
 Write all staged vault files to disk now. Then:
 
 ```bash
-git -C $QH_KNOWLEDGE add -A
-git -C $QH_KNOWLEDGE status
+git -C ${PREFIX_UPPER}_KNOWLEDGE add -A
+git -C ${PREFIX_UPPER}_KNOWLEDGE status
 ```
 
 **Security scan (automated — stops if PHI found):**
 ```bash
-git -C $QH_KNOWLEDGE diff --cached \
+git -C ${PREFIX_UPPER}_KNOWLEDGE diff --cached \
   | grep -iE "(xoxb|secret_|password|_API_TOKEN|MRN|SSN|patient)" 2>/dev/null
 ```
 
 If anything flags: stop. Remove it, re-stage. Do not commit until clean.
 
 ```bash
-git -C $QH_KNOWLEDGE \
+git -C ${PREFIX_UPPER}_KNOWLEDGE \
   commit -m "session: YYYY-MM-DD [brief description]"
-git -C $QH_KNOWLEDGE push
+git -C ${PREFIX_UPPER}_KNOWLEDGE push
 ```
 
 If nothing was written to the vault, skip and say so.
@@ -307,7 +307,7 @@ Next session:
 Next session starter prompt (copy into a new thread):
 ═══════════════════════════════════════════════════════════════
 
-[Skill invocation, e.g. /qh-arch [TICKET-ID] or /start]
+[Skill invocation, e.g. /{prefix}-arch [TICKET-ID] or /start]
 
 [Two to four sentences of context — what artifact to read, what the
 state is, what the next gate or deliverable is. Specific enough that
@@ -319,21 +319,21 @@ starting work.]
 
 **Examples:**
 
-After a /qh-spec session that produced an approved spec:
+After a /{prefix}-spec session that produced an approved spec:
 ```
-/qh-arch [TICKET-ID]
+/{prefix}-arch [TICKET-ID]
 
-Spec is at 02-tickets/[TICKET-ID]/[TICKET-ID]-spec.md (Status: APPROVED). /qh-arch
+Spec is at 02-tickets/[TICKET-ID]/[TICKET-ID]-spec.md (Status: APPROVED). /{prefix}-arch
 reads the spec + four standards docs at claude-dotfiles/ and produces
 the design. Gate 2 (explain-back after design) is the chain-level pause.
 ```
 
-After a /qh-support session that confirmed Tier 2 routing:
+After a /{prefix}-support session that confirmed Tier 2 routing:
 ```
-/qh-spec [TICKET-ID]
+/{prefix}-spec [TICKET-ID]
 
 Support handoff at 02-tickets/[TICKET-ID]/[TICKET-ID]-support-handoff.md
-(SUPPORT_COMPLETE). Root cause: [one line]. /qh-spec produces AC + VS.
+(SUPPORT_COMPLETE). Root cause: [one line]. /{prefix}-spec produces AC + VS.
 Four gates: RESTATE / REQUIREMENTS+AC / VS / explain-back.
 ```
 
@@ -342,7 +342,7 @@ After a session with no specific next chain step (fallback — still produce a s
 /start
 
 Last session pending: [from session log Pending field].
-Open tickets to consider: [list from S-18 state or /status].
+Open tickets to consider: [list from /status].
 ```
 
 The fallback `/start` block is the floor — even when the chain has no obvious next step, the starter prompt block lands. Never end /close without it. The habit of close-then-restart-with-context is what prevents drift across sessions.

@@ -3,7 +3,7 @@
 **Role:** Guide schema registry YAML + Postman config setup for a new client.
 Every step explained before executed.
 
-**Vault:** `$QH_KNOWLEDGE/`
+**Vault:** `${PREFIX_UPPER}_KNOWLEDGE/`
 
 ---
 
