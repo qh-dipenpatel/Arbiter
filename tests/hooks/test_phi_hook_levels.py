@@ -132,9 +132,26 @@ class PostHookLevels(unittest.TestCase):
     def test_each_level_is_shown(self) -> None:
         expected = {"deny": "NAME (deny)", "ask": "PHONE (ask)", "warn": "CONTEXT_CLUE (warn)"}
         for level, text in level_texts().items():
-            context = self.context_for(text)
-            self.assertIn("PHI DETECTED", context)
-            self.assertIn(expected[level], context)
+            self.assertIn(expected[level], self.context_for(text))
+
+    def test_deny_and_ask_keep_the_firm_wording(self) -> None:
+        for level in ("deny", "ask"):
+            context = self.context_for(level_texts()[level])
+            self.assertIn("PHI DETECTED", context, level)
+            self.assertIn("Do not process", context, level)
+
+    def test_warn_has_softer_wording(self) -> None:
+        context = self.context_for(level_texts()["warn"])
+        self.assertNotIn("PHI DETECTED", context)
+        self.assertNotIn("Do not process", context)
+        self.assertIn("Weak PHI signal", context)
+        self.assertIn("false alarm", context)
+
+    def test_strongest_finding_sets_the_wording(self) -> None:
+        mixed = level_texts()["deny"] + "\n" + level_texts()["warn"]
+        context = self.context_for(mixed)
+        self.assertIn("PHI DETECTED", context)
+        self.assertIn("CONTEXT_CLUE (warn)", context)
 
     def test_clean_result_is_silent(self) -> None:
         out = run_hook(POST_HOOK, {"tool_name": "Bash", "tool_response": {"stdout": "hello"}})

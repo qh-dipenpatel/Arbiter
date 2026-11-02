@@ -20,7 +20,7 @@ A Claude Code configuration that turns Claude from a general assistant into a sp
 | `commands/` | Skill files. Each one is a `/command` you invoke in Claude Code. |
 | `lenses/` | Perspective files for `/lens`. Each one shifts how Claude frames a problem. |
 | `memory/` | Personal feedback memories. Accumulate as you work and correct Claude. |
-| `hooks/` | Claude Code hooks, defined in `settings.json` and installed globally to `~/.claude/settings.json`. `pre-submit-vault-inject.sh` injects vault context before every prompt, withholding excerpts that contain PHI (UserPromptSubmit). `pre-tool-write-scan-phi.py` blocks PHI from being written to disk (PreToolUse Write/Edit/MultiEdit/NotebookEdit, fails closed). `pre-tool-write-guard-path.sh` blocks writes to the read-only code directory (PreToolUse Write/Edit). `pre-tool-bash-scan-phi.py` blocks Bash commands whose text contains PHI (PreToolUse Bash). `pre-tool-bash-databricks-ask.py` asks for approval before Databricks commands that return row data, with a summary of the data requested (PreToolUse Bash). `post-tool-result-scan-phi.py` warns Claude when any tool result contains PHI, including Databricks tables and JSON rows (PostToolUse). `post-tool-bash-scan-secrets.py` warns Claude when any tool result contains credentials (PostToolUse; it cannot remove them from what Claude already received). `pre-compact-checkpoint-warn.sh` runs before context compression (PreCompact). Shared code: `phi_patterns.py`, `sql_summary.py`. `pre-commit-secrets` blocks credential commits in any repo (git hook, not a Claude hook). |
+| `hooks/` | Claude Code hooks, defined in `settings.json` and installed globally to `~/.claude/settings.json`. `pre-submit-vault-inject.sh` injects vault context before every prompt, withholding excerpts that contain PHI (UserPromptSubmit). `pre-tool-write-scan-phi.py` blocks or asks before PHI is written to disk, by finding level (PreToolUse Write/Edit/MultiEdit/NotebookEdit, fails closed on errors it catches). `pre-tool-write-guard-path.sh` blocks writes to the read-only code directory (PreToolUse Write/Edit). `pre-tool-bash-scan-phi.py` blocks or asks before a Bash command whose text, or whose named script file, contains PHI (PreToolUse Bash). It fails closed on errors it catches: the command is denied. Reading the script file is best effort and never blocks. `pre-tool-bash-databricks-ask.py` asks for approval before Databricks commands that return row data, with a summary of the data requested (PreToolUse Bash). `post-tool-result-scan-phi.py` warns Claude when any tool result contains PHI, including Databricks tables and JSON rows, with a softer note for weak signals (PostToolUse). `post-tool-bash-scan-secrets.py` warns Claude when any tool result contains credentials (PostToolUse; it cannot remove them from what Claude already received). `pre-compact-checkpoint-warn.sh` runs before context compression (PreCompact). Shared code: `phi_patterns.py`, `sql_summary.py`. `pre-commit-secrets` blocks credential commits in any repo (git hook, not a Claude hook). |
 | `rag/` | Retrieval scripts. `build_index.py` indexes your vault into ChromaDB. `query_index.py` retrieves relevant chunks with cross-encoder reranking. |
 | `cursor-rules/` | Cursor IDE policy files for the secondary review workflow. |
 | `settings.json` | Permission rules and hook wiring for Claude Code. |
@@ -111,6 +111,42 @@ Most tickets follow one of these patterns. `{prefix}` is the skill prefix you se
 ```
 
 See [Walkthrough](docs/walkthrough.md) for a complete example of the bug chain with fake data.
+
+---
+
+## What PHI Detection Catches and What It Does Not
+
+PHI detection is a safety net made of fixed text patterns. It does not understand meaning, it will raise false alarms, and it is not deidentification. When it fires, replace the value with a placeholder. Do not add an exception. Details and test coverage: [Hook Reference](docs/hooks.md).
+
+**What it catches.** Every finding has a level.
+
+| Level | What happens | What triggers it |
+|---|---|---|
+| deny | The action is blocked | A labeled identifier (MRN, SSN, patient or member ID, NPI, insurance ID), a date next to a birth word, a full street address with city, state and ZIP, a capitalized name right after a patient, member or pt label, a PHI column name that has data |
+| ask | Claude Code asks you to approve | A phone number next to a phone label, or two different kinds of weak clue within 200 characters of each other |
+| warn | The action goes ahead and a visible message is added | One weak clue on its own (a titled name, an age with a sex word or `y/o`, a date next to an admission or visit word) or a phone number with separators and no label |
+
+A street part on its own, or a clinical word on its own, is never a finding. Messages name the rule and the level, never the matched text.
+
+**Where it looks.** Content going into Write, Edit, MultiEdit and NotebookEdit. Bash command text, and script files named in the command (python, bash, sh, zsh, node, source or a path), which are read and never run. Every tool result, after the fact. Vault excerpts, which are withheld before they are injected.
+
+**What it does not catch.**
+
+1. Names with no clue nearby. Only a name after a patient style label, or after a title, is looked at.
+2. Addresses that lack a street, city, state and ZIP together. A street part alone is not flagged.
+3. Phone numbers outside US style formats, and bare digit runs with no separators.
+4. Dates with no birth word and no care event word nearby.
+5. Clinical narrative with no personal clue. Rare conditions can still point to one person.
+6. Split, encoded or generated text. A script that builds or fetches data at run time is never seen before it runs, and a script reached through a variable, `cd`, `-m`, `xargs` or a pipe is not found. A command longer than 32,768 characters is scanned as text only, so the script files it names are not read.
+7. Files a script writes. They are seen only when Claude reads them, and by then the data is already in Claude's context.
+8. Images, PDFs, other binary files and archives.
+9. File names, paths, URLs and branch names. The Write hook reads content, not the target path.
+10. Anything typed in the chat prompt. No hook scans it.
+11. Non US and non English formats.
+12. Other HIPAA identifiers: email values, IP addresses, vehicle and device IDs, account numbers, license numbers. Only email column names are flagged.
+13. Results the post hook flags are already in Claude's context. It warns and cannot take them back.
+
+**If the hook itself breaks.** The Write and Bash hooks deny the action when they hit an error they can catch (bad input, missing pattern module, any exception). A hook process that cannot start, or one cancelled by a timeout, is a non blocking error in Claude Code, so the action goes ahead (source: Claude Code hooks documentation, checked 2026-11-02).
 
 ---
 

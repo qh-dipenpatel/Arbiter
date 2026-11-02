@@ -11,6 +11,9 @@ ChangeLog:
               message and lets the normal permission flow run.
   2026-11-02  Scans script files named in the command (python, bash, sh, zsh, node,
               source, or a path). The file is only read, never run.
+  2026-11-02  Safety and speed: commands over MAX_PARSE_CHARS skip script parsing, the
+              inline flag pattern is bounded, and a path the system rejects (null byte)
+              no longer blocks the command: the script layer degrades, never blocks.
 
 Trigger: PreToolUse — Bash
 Action: scan tool_input.command, and the content of script files it runs, with the shared
@@ -20,7 +23,8 @@ with a clear message, same as the write hook.
 Script file scan: best effort. The command is split with shlex. A file that is missing,
 unreadable, not a regular file, binary, or an unparseable command is skipped and the
 command text alone decides; these cases never block. A file larger than MAX_SCRIPT_BYTES
-is read in blocks of that size with a small overlap, never skipped.
+is read in blocks of that size with a small overlap, never skipped. A command longer than
+MAX_PARSE_CHARS is scanned as text only: its script files are not read.
 Known limits: PHI that a script builds, fetches or writes at run time is not in the command
 text or the file. Split or encoded strings dodge the patterns. Scripts reached through
 variables, cd, -m module, xargs or pipes are not found. The file can change after the scan.
@@ -44,6 +48,10 @@ MAX_SCRIPT_BYTES = 256 * 1024
 BLOCK_OVERLAP_BYTES = 1024
 BINARY_SNIFF_BYTES = 8192
 MAX_SCRIPT_FILES = 10
+# shlex is pure Python and slows sharply on one very long word (about 23 seconds for a
+# 1 MB word, measured). A command longer than this is scanned as text only.
+MAX_PARSE_CHARS = 32 * 1024
+FLAG_LETTERS_MAX = 20
 INTERPRETER = re.compile(r"(?:python[0-9.]*|bash|sh|zsh|node)")
 SHELL_INTERPRETER = re.compile(r"(?:bash|sh|zsh)")
 SOURCE_WORDS = frozenset({"source", "."})
@@ -52,7 +60,7 @@ ENV_ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*")
 # Flags after which the next word is inline code or a module, not a script file.
 PYTHON_INLINE = re.compile(r"-[mc]")
 NODE_INLINE = re.compile(r"-[ep]|--eval|--print")
-SHELL_INLINE = re.compile(r"-[A-Za-z]*c[A-Za-z]*")
+SHELL_INLINE = re.compile(r"-[A-Za-z]{0,%d}c[A-Za-z]{0,%d}" % (FLAG_LETTERS_MAX, FLAG_LETTERS_MAX))
 OPERATOR = re.compile(r"[();<>|&]+")
 
 
@@ -106,7 +114,12 @@ def script_in_segment(segment: list[str]) -> str | None:
 
 
 def script_paths(command: str, cwd: str) -> list[str]:
-    """Absolute paths of script files the command names, in order, without duplicates."""
+    """
+    Absolute paths of script files the command names, in order, without duplicates.
+    A command longer than MAX_PARSE_CHARS is not parsed and names no files.
+    """
+    if len(command) > MAX_PARSE_CHARS:
+        return []
     found: list[str] = []
     for segment in split_segments(command):
         raw = script_in_segment(segment)
@@ -138,7 +151,10 @@ def iter_file_blocks(path: str) -> Iterator[str]:
 
 
 def scan_script(path: str, scan_levels: Callable[[list[str]], list]) -> list:
-    """Findings for one script file. A missing or unreadable file gives no findings."""
+    """
+    Findings for one script file. A missing or unreadable file, or a path the operating
+    system rejects (ValueError, for example an embedded null byte), gives no findings.
+    """
     try:
         if not stat.S_ISREG(os.stat(path).st_mode):
             return []
@@ -146,7 +162,7 @@ def scan_script(path: str, scan_levels: Callable[[list[str]], list]) -> list:
         for block in iter_file_blocks(path):
             findings.update(scan_levels([block]))
         return list(findings)
-    except OSError:
+    except (OSError, ValueError):
         return []
 
 

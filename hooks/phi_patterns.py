@@ -36,7 +36,13 @@ from typing import Iterator
 
 # Label/value pairs in free text. (?<![A-Za-z]) instead of \b so prefixes like
 # patient_mrn still match; [=:] and optional quotes cover key=value and JSON.
-_SEP = r'["\']?\s*[:=#\s\-]\s*["\']?'
+# Whitespace on each side of the separator is capped. The old open ended \s* on both
+# sides of a whitespace capable class made a long run of spaces cost time quadratic in
+# the run length. A cap this size still covers any realistic gap between a label and its value.
+SEP_SPACE_MAX = 10
+LABEL_SUFFIX_MAX = 20
+_SEP = (r'["\']?\s{0,' + str(SEP_SPACE_MAX) + r'}[:=#\s\-]\s{0,' + str(SEP_SPACE_MAX)
+        + r'}["\']?')
 _DATE = r'(?:\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}|\d{4}-\d{2}-\d{2})'
 
 # Bounded building blocks for the strong rules. Every repeat has an upper limit so a
@@ -57,7 +63,7 @@ _PHONE_LABELED = r'(?:\+?1[-.\s]{1,2})?(?:\([2-9]\d{2}\)\s{0,2}|[2-9]\d{2}[-.\s]
 _PHONE_BARE = r'(?<![\d\-.])(?:\([2-9]\d{2}\)\s{0,2}|[2-9]\d{2}[-.])\d{3}[-.]\d{4}(?![\d\-.])'
 
 PHI_PATTERNS: list[tuple[str, str]] = [
-    (r'(?<![A-Za-z])MRN\w*' + _SEP + r'\d{5,10}\b', 'MRN'),
+    (r'(?<![A-Za-z])MRN\w{0,' + str(LABEL_SUFFIX_MAX) + r'}' + _SEP + r'\d{5,10}\b', 'MRN'),
     (r'\b(?:SSN|social[\s_]security(?:[\s_]number)?)[,:\s][^.\n\d]{0,25}\d{3}[-\s]\d{2}[-\s]\d{4}\b', 'SSN'),
     (r'(?<![A-Za-z])(?:DOB|date[\s_]?of[\s_]?birth|birth[\s_]?date|born)' + _SEP + _DATE, 'DOB'),
     (r'(?<![A-Za-z])(?:patient|member|pt)[\s_]?id' + _SEP + r'\d+\b', 'PATIENT_ID'),
@@ -280,20 +286,35 @@ def iter_chunks(text: str) -> Iterator[tuple[int, str]]:
             return
 
 
+def _pairs_with(first: Clue, second: Clue) -> bool:
+    """first starts no later than second. Different kinds that do not overlap pair."""
+    return first.kind != second.kind and second.start >= first.end
+
+
+def _has_partner(ordered: list[Clue], index: int) -> bool:
+    """True when some clue within CONTEXT_WINDOW of ordered[index] pairs with it."""
+    me = ordered[index]
+    after = index + 1
+    while after < len(ordered) and ordered[after].start - me.start <= CONTEXT_WINDOW:
+        if _pairs_with(me, ordered[after]):
+            return True
+        after += 1
+    before = index - 1
+    while before >= 0 and me.start - ordered[before].start <= CONTEXT_WINDOW:
+        if _pairs_with(ordered[before], me):
+            return True
+        before -= 1
+    return False
+
+
 def paired_clues(clues: set[Clue]) -> set[Clue]:
     """
     Clues that sit with a clue of a different kind inside CONTEXT_WINDOW characters.
-    Clues whose text overlaps never pair, so one word cannot count twice.
+    Clues whose text overlaps never pair, so one word cannot count twice. Each clue
+    stops searching at its first partner, so dense mixed text stays fast.
     """
     ordered = sorted(clues, key=lambda c: (c.start, c.end, c.kind))
-    paired: set[Clue] = set()
-    for i, first in enumerate(ordered):
-        for second in ordered[i + 1:]:
-            if second.start - first.start > CONTEXT_WINDOW:
-                break
-            if first.kind != second.kind and second.start >= first.end:
-                paired.update((first, second))
-    return paired
+    return {clue for index, clue in enumerate(ordered) if _has_partner(ordered, index)}
 
 
 def scan_context(texts: list[str]) -> list[Finding]:
@@ -449,7 +470,7 @@ def scan_structured(texts: list[str]) -> list[str]:
             try:
                 _scan_json_node(json.loads(stripped), found)
                 continue
-            except ValueError:
+            except (ValueError, RecursionError):
                 pass
         _scan_text_table(text, found)
     return sorted(found)
