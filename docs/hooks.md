@@ -331,7 +331,7 @@ The write and Bash hooks scan before the action runs. The result hook scans afte
 
 | Level | Pre hook outcome | Rules at this level (verified in `phi_patterns.py`) |
 |---|---|---|
-| deny | `permissionDecision: deny` | The labeled identifier rules above, a date next to a birth word (also with month names, "born on" and "birthday"), a full street address (number, street words, street suffix, city, two letter state, ZIP), a capitalized name right after a patient, member or pt label (`NAME`), PHI column names that come with data (`COLUMN:`). A label missing from the level map also defaults to deny. |
+| deny | `permissionDecision: deny` | The labeled identifier rules above, a date next to a birth word (also with month names, "born on" and "birthday"), a full street address (number, street words, street suffix, city, two letter state, ZIP), a capitalized name right after a patient, member or pt label (`NAME`), PHI column names that come with data (`COLUMN`, the column name itself is never shown). A label missing from the level map also defaults to deny. |
 | ask | `permissionDecision: ask` | A phone number next to a phone label (`PHONE`). Two clues of different kinds within 200 characters (`CONTEXT`). |
 | warn | No permission decision. A `systemMessage` and `additionalContext` are added and the normal permission flow runs. | A lone titled name (`Mr`, `Mrs`, `Ms`, `Mx` plus two capitalized words), a lone age with a sex word or `y/o`, or a lone date next to an admission, discharge, visit, surgery or procedure word (`CONTEXT_CLUE`). A phone number with separators and no label (`PHONE_UNLABELED`). |
 

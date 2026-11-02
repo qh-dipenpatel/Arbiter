@@ -23,6 +23,7 @@ links: []
 #   staleness_score: 0.0
 #   integrity_pass: true
 #   voice_pass: true
+update_needed: 2026-11-02
 ---
 
 ## Purpose
@@ -62,3 +63,20 @@ flowchart TD
 ## Notes
 
 [Edge cases, known limitations, maintenance notes.]
+
+Review fixes (name and date rules):
+
+- Text is normalized before matching: zero width characters are removed, NFKC folds compatibility forms, and common Cyrillic and Greek lookalike letters plus slash and dash lookalikes map to ASCII. ASCII text skips this step.
+- NAME: a capitalized value after a patient label denies. If a word in the value is a generic form, team or system word (`NAME_ASK_WORDS`), it asks instead. Lowercase values only match after an explicit name label (`patient name:`) and only ask. Accented capitals are accepted.
+- DOB: labels `D.O.B.`, dashed `date-of-birth` and `birth-date`; dates year first with `/` or `.`, dotted day first, and eight digits, only right after a birth label.
+- PHONE: a label followed by up to 50 spaces (`PHONE_GAP_MAX`) before the number stays ask.
+- Smaller gaps closed: `58 yo male` age clue, `Medical Record Number:` label, event word and date split by one newline.
+
+Still not detected:
+
+- A lowercase name after a bare `patient:` label with no `name` word.
+- Names with no label, titles in other languages, and nicknames.
+- Lookalikes outside the small table (other scripts, rare symbols), and digits written as words or in non-ASCII digit sets that NFKC does not fold to ASCII.
+- A birth date without a birth label, or a label and date more than the separator cap apart.
+- Event dates more than one line away from the event word, and two digit year ambiguity.
+- A name value that contains none of the generic words but is still not a person still denies.
