@@ -347,7 +347,7 @@ If {NAME}'s explain-back reveals he is missing something important about the del
 
 ## Step 5 — HANDOFF
 
-Write `02-tickets/{KEY}/{KEY}-spec.md` with all 17 sections. First line of body: `Status: APPROVED`.
+Write `02-tickets/{KEY}/{KEY}-spec.md` with all 17 sections. The file has a `Status: APPROVED` line near the top and ends with an approval line, `Approved — YYYY-MM-DD`, using today's date. Write the approval line only after the explain-back in Step 4 has happened. It sits at the end of the file, outside any code fence.
 
 ### Spec file structure
 

@@ -268,7 +268,7 @@ Write `02-tickets/{KEY}/{KEY}-design.md` with the full section contract. Run Cur
 
 ### Write design.md
 
-First line of body: `Status: DESIGN_COMPLETE` (becomes `DESIGN_APPROVED` after Gate 4 explain-back and {NAME} adds the Approved line).
+The file carries `Status: DESIGN_COMPLETE` near the top. It stays `DESIGN_COMPLETE`. Approval is the `Approved — YYYY-MM-DD` line that {NAME} adds at the end of the file after the Gate 4 explain-back.
 
 Full section list (in this order — this is the contract /{prefix}-dev reads):
 
@@ -393,7 +393,7 @@ Expected: [what each query should return if the fix is correct]
 
 
 ---
-Approved — [{NAME} adds this line with date after Gate 4 explain-back]
+Approval pending. {NAME} replaces this line with the approval line from docs/gate-lines.md after the Gate 4 explain-back.
 ```
 
 ### Cursor design review #2 — Validate full design.md
@@ -418,7 +418,7 @@ Flag any reasoning gap. Critical findings must be addressed before approval.
 ### Update state file
 
 After Cursor #2 findings are addressed, update `02-tickets/{KEY}/{KEY}-state.md`:
-- Status: DESIGN_COMPLETE (becomes DESIGN_APPROVED after {NAME} adds the Approved line)
+- Status: DESIGN_COMPLETE (stays as is. The Approved line in design.md is the approval)
 - Next skill: /{prefix}-dev (reads design.md, runs once per work block)
 - Confirmed approach: Option [N] — [name]
 - Work blocks: B-01 ... B-N (N total)
@@ -470,7 +470,7 @@ End output:
 
 ```
 Design written: 02-tickets/{KEY}/{KEY}-design.md
-Status: DESIGN_APPROVED
+Status: DESIGN_COMPLETE (add the Approved line to the design file to approve)
 Work blocks: [N] total — B-01 first
 
 Chain step complete. Start a fresh thread for /{prefix}-dev to begin Block B-01.
@@ -481,7 +481,7 @@ Next session starter prompt (copy into a new thread):
 
 /{prefix}-dev {KEY} B-01
 
-Design approved YYYY-MM-DD at 02-tickets/{KEY}/{KEY}-design.md.
+Design written at 02-tickets/{KEY}/{KEY}-design.md. It is approved once {NAME} adds the Approved line.
 Work-block plan has [N] blocks. Starting with B-01: [name].
 /{prefix}-dev reads design.md, support-handoff.md, spec.md, state.md, and the
 four standards docs in Step 0. Runs once per block.

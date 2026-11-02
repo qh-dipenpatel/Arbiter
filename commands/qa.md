@@ -22,7 +22,7 @@
 /{prefix}-qa [JIRA-ID]
 ```
 
-Invoked manually in a fresh thread after /{prefix}-dev's chain-level Gate 3 (edge-case-validation explain-back) has fired and `edge-case-validation.md` is in the ticket folder with `Status: VALIDATED`. /{prefix}-qa reviews the aggregate merged diff across all blocks — never per-block (per-block Cursor in /{prefix}-dev is structural; /{prefix}-qa's job is the integration view).
+Invoked manually in a fresh thread after /{prefix}-dev's chain-level Gate 3 (edge-case-validation explain-back) has fired and `edge-case-validation.md` is in the ticket folder with a `Validated — YYYY-MM-DD` line. /{prefix}-qa reviews the aggregate merged diff across all blocks — never per-block (per-block Cursor in /{prefix}-dev is structural; /{prefix}-qa's job is the integration view).
 
 ---
 
@@ -31,7 +31,7 @@ Invoked manually in a fresh thread after /{prefix}-dev's chain-level Gate 3 (edg
 Run `date` via bash. Use that output as ground truth — never trust `currentDate` system reminders.
 
 Read in parallel:
-- `02-tickets/{KEY}/{KEY}-state.md` — expects `Status: DEV_COMPLETE` and `Last block applied: all` (or numeric N where N is total blocks)
+- `02-tickets/{KEY}/{KEY}-state.md` — expects `Status: DEV_COMPLETE` and `last_block_applied` naming the final block in the design (for example `B-05` when the design has five blocks)
 - `02-tickets/{KEY}/{KEY}-spec.md` — expects `Approved — YYYY-MM-DD` line
 - `02-tickets/{KEY}/{KEY}-design.md` — expects `Approved — YYYY-MM-DD` line
 - `02-tickets/{KEY}/{KEY}-edge-case-validation.md` — **REQUIRED**, expects `Validated — YYYY-MM-DD` line
@@ -61,7 +61,7 @@ State explicitly what was loaded, in plain language. Name the ticket title, the 
 Do not gate here — Step 0 is informational.
 
 **Refusal checks (all hard stops):**
-- If `edge-case-validation.md` is missing or `Status` is not `VALIDATED`: **STOP** — say "Chain-level Gate 3 was supposed to produce edge-case-validation.md. Route back to /{prefix}-dev to complete chain-level Gate 3 before /{prefix}-qa." Do not proceed.
+- If `edge-case-validation.md` is missing or lacks the `Validated — YYYY-MM-DD` line: **STOP** — say "Chain-level Gate 3 was supposed to produce edge-case-validation.md. Route back to /{prefix}-dev to complete chain-level Gate 3 before /{prefix}-qa." Do not proceed.
 - If `state.md` Status is not `DEV_COMPLETE`: **STOP** — say "Implementation incomplete. Run /{prefix}-dev for the remaining block(s) before /{prefix}-qa." Do not proceed.
 - If `spec.md` lacks `Approved` line: **STOP** — route to /{prefix}-spec.
 - If `design.md` lacks `Approved` line: **STOP** — route to /{prefix}-arch.
@@ -266,8 +266,8 @@ Act as an adversary. Find what will go wrong with this implementation.
 Inputs:
 - Merged diff: [your DEV_DIR]/{prefix}-code-temp/PROPOSED_{YYYY-MM-DD}_{KEY}/Block_*/Block_B-*-DIFF.md
 - Spec: 02-tickets/{KEY}/{KEY}-spec.md (Status APPROVED)
-- Design: 02-tickets/{KEY}/{KEY}-design.md (Status APPROVED)
-- Edge-case validation: 02-tickets/{KEY}/{KEY}-edge-case-validation.md (Status VALIDATED)
+- Design: 02-tickets/{KEY}/{KEY}-design.md (Approved line present)
+- Edge-case validation: 02-tickets/{KEY}/{KEY}-edge-case-validation.md (Validated line present)
 - Standards:
   - claude-dotfiles/standards/skill-standard.md
   - claude-dotfiles/standards/voice-standard.md
@@ -715,7 +715,7 @@ Standards-anchored, not subjective. Apply this table to every finding:
 |---|---|
 | `spec.md` is not APPROVED | Route to /{prefix}-spec — "spec is not approved" |
 | `design.md` is not APPROVED | Route to /{prefix}-arch — "design is not approved" |
-| `edge-case-validation.md` is missing or not VALIDATED | Route to /{prefix}-dev — "chain-level Gate 3 must complete first" |
+| `edge-case-validation.md` is missing or has no `Validated` line | Route to /{prefix}-dev — "chain-level Gate 3 must complete first" |
 | `state.md` Status is not DEV_COMPLETE | Route to /{prefix}-dev — "implementation incomplete" |
 | `[your DEV_DIR]/{prefix}-code-temp/PROPOSED_*_{KEY}/Block_*/` is missing or empty | Route to /{prefix}-dev — "no proposed diff to review" |
 
