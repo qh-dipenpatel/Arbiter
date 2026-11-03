@@ -7,11 +7,12 @@ indexed: null
 repo: "Arbiter"
 source_file: "tests/hooks/test_gate_hook.py"
 status: ACTIVE
-last_updated: 2026-11-02
+last_updated: 2026-11-03
 scores: []
 covers: ["hooks/pre-prompt-expansion-check-gates.py"]
 tags: [gate, chain-skills, hook]
 links: []
+update_needed: 2026-11-03
 ---
 
 ## Purpose
@@ -24,14 +25,17 @@ Runs the gate hook as a subprocess against synthetic ticket folders in a temp di
 
 ## Behavior
 
-25 tests, matching design tests 10 to 26.
+36 tests: design tests 10 to 26 plus regression tests from the adversarial review.
 
 - arch, dev and qa: allow with good files, block with a missing file, wrong state or missing line, with the block message naming the path.
-- Allow paths: entry-point skills, other prefixes and unrelated commands (silent, no log); no ticket id, unset vault, unset prefix, traversal tokens and a symlinked folder outside the vault (allowed and logged).
+- Allow paths: entry-point skills, other prefixes and unrelated commands (silent, no log); no ticket id, unset vault, unset prefix, traversal tokens and a symlinked folder outside the vault (allowed and logged as no ticket id). Ticket ids with trailing punctuation are still gated, and a symlinked folder named first does not hide a real ticket named second.
 - Fail open: bad JSON, non-object JSON and a forced error inside `gate_rules` give exit 0, a stderr warning and a log line.
 - Override: valid today for the skill allows and logs; wrong skill, yesterday and no reason block.
+- Ticket choice: `UTF-8 T-001` and `T-001 UTF-8` both gate T-001; a lone `UTF-8` is allowed and logged; lowercase `t-001` is still gated.
+- Override hardening: a line inside a fence is ignored, a line after a closed fence counts, a symlinked override file is refused and logged, a BOM before the line is fine, a Unicode digit date fails.
+- Unreadable file: permission denied is named in the block message and flagged in the log; a missing file is not called unreadable.
 - Atomic replace: repeated hook runs while a thread rewrites the state file never block.
-- Leak check: a marker string in the files never appears in stdout, stderr or the log.
+- Leak check: a marker string in the files never appears in stdout, stderr or the log, and the block message never prints the `Status:` value. The expected value is named instead.
 
 ## Diagram
 

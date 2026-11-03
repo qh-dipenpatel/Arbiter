@@ -6,6 +6,7 @@ Ticket: n/a
 
 ChangeLog:
   - Initial version: parser tests 1 to 9 plus per-skill rule tests.
+  - 2026-11-03: fence, ASCII digit, line split, BOM and no Status echo regression tests.
 """
 from __future__ import annotations
 
@@ -84,6 +85,59 @@ class ApprovalLineTests(unittest.TestCase):
         self.assertTrue(gr.has_validated_line(approval(word="Validated"), TODAY))
         self.assertFalse(gr.has_validated_line(approval(), TODAY))
         self.assertFalse(gr.has_approval_line(approval(word="Validated"), TODAY))
+
+
+class FenceTrackingTests(unittest.TestCase):
+    def counts(self, *lines: str) -> bool:
+        return gr.has_approval_line("\n".join(lines) + "\n", TODAY)
+
+    def test_mixed_marker_kinds_do_not_toggle(self) -> None:
+        self.assertFalse(self.counts(FENCE, approval(), "~~~"))
+        self.assertFalse(self.counts("~~~", approval(), FENCE))
+
+    def test_longer_outer_fence_holds_shorter_fence_line(self) -> None:
+        self.assertFalse(self.counts(FENCE + "`", FENCE, approval(), FENCE + "`"))
+
+    def test_closing_line_with_info_text_does_not_close(self) -> None:
+        self.assertFalse(self.counts(FENCE, FENCE + "python", approval(), FENCE))
+
+    def test_closing_line_with_more_markers_closes(self) -> None:
+        self.assertTrue(self.counts(FENCE, "code", FENCE + "`", approval()))
+
+    def test_opening_fence_may_carry_info_text(self) -> None:
+        self.assertFalse(self.counts(FENCE + "python", approval(), FENCE))
+
+    def test_four_space_indent_is_not_a_fence(self) -> None:
+        self.assertTrue(self.counts("    " + FENCE, approval()))
+
+    def test_backtick_line_with_backtick_in_info_is_not_a_fence(self) -> None:
+        self.assertTrue(self.counts(FENCE + "a`b", approval()))
+
+    def test_status_after_mixed_fences_stays_hidden(self) -> None:
+        text = "{0}\n~~~\nStatus: ROUTED\n".format(FENCE)
+        self.assertFalse(gr.read_status(text).ok)
+
+
+class TextHandlingTests(unittest.TestCase):
+    def test_unicode_digits_do_not_count(self) -> None:
+        wide = "".join(chr(0xFF10 + int(ch)) if ch.isdigit() else ch for ch in GOOD_DATE)
+        arabic = "".join(chr(0x0660 + int(ch)) if ch.isdigit() else ch for ch in GOOD_DATE)
+        self.assertFalse(gr.has_approval_line(approval(date=wide), TODAY))
+        self.assertFalse(gr.has_approval_line(approval(date=arabic), TODAY))
+
+    def test_line_separator_does_not_split_lines(self) -> None:
+        text = "x" + chr(0x2028) + approval() + "\n"
+        self.assertFalse(gr.has_approval_line(text, TODAY))
+        self.assertEqual(gr.read_status("Status: IN_DEV" + chr(0x2028) + "Status: ROUTED\n").value,
+                         "IN_DEV" + chr(0x2028) + "Status: ROUTED")
+
+    def test_lone_carriage_return_does_not_split(self) -> None:
+        self.assertFalse(gr.has_approval_line("x\r" + approval() + "\n", TODAY))
+
+    def test_bom_does_not_hide_first_line(self) -> None:
+        self.assertEqual(gr.read_status("\ufeffStatus: IN_DEV\n").value, "IN_DEV")
+        self.assertEqual(gr.read_status(b"\xef\xbb\xbfStatus: IN_DEV\n").value, "IN_DEV")
+        self.assertTrue(gr.check_dev(b"\xef\xbb\xbf" + approval().encode(), state("IN_DEV"), TODAY).ok)
 
 
 class StatusTests(unittest.TestCase):
@@ -210,6 +264,16 @@ class QaRuleTests(unittest.TestCase):
     def test_missing_design_blocks(self) -> None:
         self.design = None
         self.assertIn("design.md", self.run_qa().reason)
+
+    def test_reason_never_prints_the_status_value_from_the_file(self) -> None:
+        for value in ("UNIQUE_STATUS_TEXT_9", "IN_DEV"):
+            self.state = state(value)
+            result = self.run_qa()
+            self.assertFalse(result.ok)
+            self.assertNotIn(value, result.reason)
+            self.assertIn("DEV_COMPLETE", result.reason)
+        arch = gr.check_arch(state("APPROVED"), state("UNIQUE_STATUS_TEXT_9"), TODAY)
+        self.assertNotIn("UNIQUE_STATUS_TEXT_9", arch.reason)
 
     def test_reason_never_contains_file_contents(self) -> None:
         secret = "UNIQUE_BODY_TEXT_12345"

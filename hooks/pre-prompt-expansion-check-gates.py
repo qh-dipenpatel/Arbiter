@@ -5,6 +5,8 @@ Date: 2026-11-02
 Scope: block the arch, dev and qa chain skills when the earlier approval lines are missing
 Ticket: n/a
 ChangeLog:
+  2026-11-03  First ticket token with a vault folder wins, ids are case insensitive and
+              uppercased, override reader hardened, unreadable files reported apart.
   2026-11-02  Created.
 
 Trigger: UserPromptExpansion (typed slash command)
@@ -17,6 +19,8 @@ lets one skill through on that date only; every use is logged.
 Reads only, so no locking. Fails OPEN on any internal error: one line goes to the log file
 (ARBITER_GATE_LOG, default ~/.arbiter/state/gate_check.log) and a warning goes to stderr.
 Block messages name paths and expected lines, never file contents.
+The override reader ignores fenced lines, refuses a symlinked override file and strips a BOM.
+An unreadable artifact (permission denied) is reported apart from a missing one.
 """
 
 from __future__ import annotations
@@ -27,7 +31,7 @@ import logging
 import os
 import re
 import sys
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 HOOKS_DIR = os.path.dirname(os.path.abspath(__file__))
 if HOOKS_DIR not in sys.path:
@@ -38,8 +42,9 @@ KNOWLEDGE_ENV = "ARBITER_KNOWLEDGE"
 LOG_ENV = "ARBITER_GATE_LOG"
 DEFAULT_LOG = os.path.join("~", ".arbiter", "state", "gate_check.log")
 TICKETS_DIR = "02-tickets"
-TICKET_ID_RE = re.compile(r"^[A-Z][A-Z0-9]*-[0-9]+$")
-OVERRIDE_RE = re.compile(r"^Override: (\S+) (\d{4}-\d{2}-\d{2}) (\S.*)$")
+TICKET_ID_RE = re.compile(r"^[A-Z][A-Z0-9]*-[0-9]+$", re.IGNORECASE)
+TOKEN_PUNCTUATION = ",.;:!?()[]{}<>\"'`"
+OVERRIDE_RE = re.compile(r"^Override: (\S+) ([0-9]{4}-[0-9]{2}-[0-9]{2}) (\S.*)$")
 DATE_FORMAT = "%Y-%m-%d"
 CHAIN_SKILLS = ("ticket", "support", "spec", "arch", "dev", "qa")
 GATED_SKILLS = ("arch", "dev", "qa")
@@ -80,11 +85,22 @@ def skill_from_command(command_name: str, prefix: str) -> Optional[str]:
     return skill if skill in CHAIN_SKILLS else None
 
 
-def find_ticket_id(command_args: str) -> Optional[str]:
-    """Return the first whitespace token that looks like a ticket id."""
-    for token in command_args.split():
-        if TICKET_ID_RE.match(token):
-            return token
+def find_ticket_ids(command_args: str) -> List[str]:
+    """Return every whitespace token that looks like a ticket id, uppercased, in order."""
+    tokens = [token.strip(TOKEN_PUNCTUATION) for token in command_args.split()]
+    return [token.upper() for token in tokens if TICKET_ID_RE.match(token)]
+
+
+def first_existing_ticket(candidates: List[str], tickets_root: str) -> Optional[str]:
+    """Return the first candidate whose real folder sits under tickets_root, else None.
+
+    A folder that is a symlink pointing outside tickets_root is skipped, so a planted link
+    cannot hide a real ticket named later in the arguments.
+    """
+    for key in candidates:
+        folder = os.path.join(tickets_root, key)
+        if os.path.isdir(folder) and is_under(tickets_root, folder):
+            return key
     return None
 
 
@@ -95,15 +111,22 @@ def is_under(root: str, path: str) -> bool:
     return os.path.commonpath([real_root, real_path]) == real_root
 
 
-def read_artifact(tickets_root: str, path: str) -> Optional[bytes]:
-    """Read bytes from path if it resolves under tickets_root, else None."""
+def try_read(tickets_root: str, path: str) -> Tuple[Optional[bytes], bool]:
+    """Return (bytes or None, unreadable). Unreadable means permission denied."""
     if not is_under(tickets_root, path):
-        return None
+        return None, False
     try:
         with open(path, "rb") as handle:
-            return handle.read()
+            return handle.read(), False
+    except PermissionError:
+        return None, True
     except OSError:
-        return None
+        return None, False
+
+
+def read_artifact(tickets_root: str, path: str) -> Optional[bytes]:
+    """Read bytes from path if it resolves under tickets_root, else None."""
+    return try_read(tickets_root, path)[0]
 
 
 def ticket_file(ticket_dir: str, key: str, suffix: str) -> str:
@@ -111,15 +134,23 @@ def ticket_file(ticket_dir: str, key: str, suffix: str) -> str:
 
 
 def override_valid(
-    tickets_root: str, ticket_dir: str, key: str, skill: str, today: datetime.date
+    rules: Any, tickets_root: str, ticket_dir: str, key: str, skill: str, today: datetime.date
 ) -> bool:
-    """True if the override file has `Override: <skill> <today> <reason>`."""
-    data = read_artifact(tickets_root, ticket_file(ticket_dir, key, OVERRIDE_SUFFIX))
-    if data is None:
+    """True if the override file has `Override: <skill> <today> <reason>` outside fences.
+
+    A symlinked override file is refused (and logged); so is one that is not UTF-8 text.
+    """
+    path = ticket_file(ticket_dir, key, OVERRIDE_SUFFIX)
+    if os.path.islink(path):
+        log_line("override_refused", "symlink {0}".format(key))
         return False
-    for line in data.decode("utf-8", errors="replace").splitlines():
+    text = rules.decode_text(read_artifact(tickets_root, path))
+    if text is None:
+        return False
+    stamp = today.strftime(DATE_FORMAT)
+    for line in rules.lines_outside_fences(text):
         match = OVERRIDE_RE.match(line.rstrip())
-        if match and match.group(1) == skill and match.group(2) == today.strftime(DATE_FORMAT):
+        if match and match.group(1) == skill and match.group(2) == stamp:
             return True
     return False
 
@@ -138,7 +169,8 @@ def run_check(
 
 
 def build_reason(
-    reason: str, skill: str, prefix: str, key: str, ticket_dir: str
+    reason: str, skill: str, prefix: str, key: str, ticket_dir: str,
+    unreadable: Optional[List[str]] = None,
 ) -> str:
     """Compose the block message: reason, file paths named in it, next skill, override."""
     paths: List[str] = [
@@ -149,6 +181,9 @@ def build_reason(
     parts = ["Gate check blocked /{0}-{1} {2}: {3}.".format(prefix, skill, key, reason)]
     if paths:
         parts.append("Files checked: " + ", ".join(paths) + ".")
+    if unreadable:
+        parts.append("Not readable (permission denied, fix the file permissions): "
+                     + ", ".join(unreadable) + ".")
     parts.append("Run /{0}-{1} {2} first.".format(prefix, RUN_FIRST[skill], key))
     parts.append(
         "To override once, the owner adds `Override: {0} YYYY-MM-DD <reason>` (today's date) to {1}.".format(
@@ -158,11 +193,18 @@ def build_reason(
     return " ".join(parts)
 
 
-def load_files(tickets_root: str, ticket_dir: str, key: str) -> Dict[str, Optional[bytes]]:
-    return {
-        suffix: read_artifact(tickets_root, ticket_file(ticket_dir, key, suffix))
-        for suffix in FILE_SUFFIXES.values()
-    }
+def load_files(
+    tickets_root: str, ticket_dir: str, key: str
+) -> Tuple[Dict[str, Optional[bytes]], List[str]]:
+    """Load the artifacts. Also return the paths that exist but are not readable."""
+    files: Dict[str, Optional[bytes]] = {}
+    unreadable: List[str] = []
+    for suffix in FILE_SUFFIXES.values():
+        path = ticket_file(ticket_dir, key, suffix)
+        files[suffix], denied = try_read(tickets_root, path)
+        if denied:
+            unreadable.append(path)
+    return files, unreadable
 
 
 def evaluate(
@@ -176,12 +218,16 @@ def evaluate(
     skill = skill_from_command(str(payload.get("command_name", "")), prefix)
     if skill not in GATED_SKILLS:
         return None
-    key = find_ticket_id(str(payload.get("command_args", "")))
+    candidates = find_ticket_ids(str(payload.get("command_args", "")))
     knowledge = env.get(KNOWLEDGE_ENV, "")
-    if key is None or not knowledge:
+    if not candidates or not knowledge:
         log_line("allow", "no ticket id or {0} unset ({1})".format(KNOWLEDGE_ENV, skill))
         return None
     tickets_root = os.path.join(knowledge, TICKETS_DIR)
+    key = first_existing_ticket(candidates, tickets_root)
+    if key is None:
+        log_line("allow", "no ticket id with a folder under {0} ({1})".format(TICKETS_DIR, skill))
+        return None
     ticket_dir = os.path.join(tickets_root, key)
     if not is_under(tickets_root, ticket_dir):
         log_line("allow", "ticket folder outside {0}".format(TICKETS_DIR))
@@ -193,17 +239,17 @@ def decide(
     skill: str, key: str, prefix: str, tickets_root: str, ticket_dir: str, today: datetime.date
 ) -> Optional[str]:
     """Check the override, then the gate rules. Return a block message or None."""
-    if override_valid(tickets_root, ticket_dir, key, skill, today):
-        log_line("override", "{0} {1}".format(skill, key))
-        return None
     import gate_rules
 
-    files = load_files(tickets_root, ticket_dir, key)
+    if override_valid(gate_rules, tickets_root, ticket_dir, key, skill, today):
+        log_line("override", "{0} {1}".format(skill, key))
+        return None
+    files, unreadable = load_files(tickets_root, ticket_dir, key)
     result = run_check(gate_rules, skill, files, today)
     if result.ok:
         return None
-    log_line("block", "{0} {1}".format(skill, key))
-    return build_reason(result.reason, skill, prefix, key, ticket_dir)
+    log_line("block", "{0} {1}{2}".format(skill, key, " unreadable" if unreadable else ""))
+    return build_reason(result.reason, skill, prefix, key, ticket_dir, unreadable)
 
 
 def parse_payload(raw: str) -> Dict[str, Any]:

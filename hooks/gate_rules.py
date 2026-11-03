@@ -9,13 +9,15 @@ Ticket: n/a
 
 ChangeLog:
   - Initial version: line parsers, status reader, arch/dev/qa checks.
+  - 2026-11-03: CommonMark style fence tracking, ASCII digits only, split lines on LF and
+    CRLF only, strip a leading BOM, block reasons never print the Status value from a file.
 """
 from __future__ import annotations
 
 import datetime
 import re
 from dataclasses import dataclass
-from typing import List, Optional, Union
+from typing import List, Optional, Tuple, Union
 
 TextInput = Union[str, bytes, None]
 
@@ -25,8 +27,9 @@ VALIDATED_KEYWORD = "Validated"
 STATUS_PREFIX = "Status:"
 SPEC_APPROVED_STATUS = "APPROVED"
 DATE_FORMAT = "%Y-%m-%d"
-FENCE_MARKERS = ("```", "~~~")
 MAX_FENCE_INDENT = 3
+MIN_FENCE_LENGTH = 3
+BOM = "\ufeff"
 
 STATE_SPEC_APPROVED = "SPEC_APPROVED"
 STATE_DESIGN_APPROVED = "DESIGN_APPROVED"
@@ -41,7 +44,9 @@ DESIGN_NAME = "design.md"
 VALIDATION_NAME = "edge-case-validation.md"
 
 _DASH = "(?:—|--|-)"
-_LINE_TEMPLATE = r"^{word} {dash} (\d{{4}}-\d{{2}}-\d{{2}})[ \t]*$"
+_LINE_TEMPLATE = r"^{word} {dash} ([0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}})[ \t]*$"
+_FENCE_RE = re.compile(r"^ {{0,{0}}}(`{{{1},}}|~{{{1},}})(.*)$".format(MAX_FENCE_INDENT, MIN_FENCE_LENGTH))
+_LINE_SPLIT_RE = re.compile(r"\r?\n")
 
 
 @dataclass(frozen=True)
@@ -62,37 +67,61 @@ class StatusResult:
 
 
 def decode_text(data: TextInput) -> Optional[str]:
-    """Return str for str or UTF-8 bytes; None for None or undecodable bytes."""
+    """Return str for str or UTF-8 bytes; None for None or undecodable bytes.
+
+    A leading byte order mark is removed so it cannot hide the first line.
+    """
     if data is None:
         return None
-    if isinstance(data, str):
-        return data
-    try:
-        return data.decode(TEXT_ENCODING)
-    except UnicodeDecodeError:
+    if isinstance(data, bytes):
+        try:
+            data = data.decode(TEXT_ENCODING)
+        except UnicodeDecodeError:
+            return None
+    return data[1:] if data.startswith(BOM) else data
+
+
+def split_lines(text: str) -> List[str]:
+    """Split on LF and CRLF only. U+2028, U+0085 and a lone CR do not split."""
+    return _LINE_SPLIT_RE.split(text)
+
+
+def _fence_open(line: str) -> Optional[Tuple[str, int]]:
+    """Return (marker character, run length) if line opens a fence, else None."""
+    match = _FENCE_RE.match(line)
+    if match is None:
         return None
+    run, info = match.group(1), match.group(2)
+    if run[0] == "`" and "`" in info:
+        return None
+    return run[0], len(run)
 
 
-def _is_fence(line: str) -> bool:
-    stripped = line.lstrip(" ")
-    indent = len(line) - len(stripped)
-    return indent <= MAX_FENCE_INDENT and stripped.startswith(FENCE_MARKERS)
+def _fence_closes(line: str, marker: str, length: int) -> bool:
+    """True if line closes a fence opened with `length` copies of `marker`."""
+    match = _FENCE_RE.match(line)
+    if match is None:
+        return False
+    run, info = match.group(1), match.group(2)
+    return run[0] == marker and len(run) >= length and not info.strip()
 
 
 def lines_outside_fences(text: str) -> List[str]:
     """Return the lines of text that are not inside a fenced code block.
 
-    Handles LF and CRLF. Fence lines themselves are dropped. An unclosed
-    fence hides everything after it.
+    A fence opens with 3 or more backticks or tildes (up to 3 spaces of indent)
+    and closes only with the same character, at least as many markers and no
+    info text. Fence lines are dropped. An unclosed fence hides the rest.
     """
     kept: List[str] = []
-    inside = False
-    for line in text.splitlines():
-        if _is_fence(line):
-            inside = not inside
-            continue
-        if not inside:
-            kept.append(line)
+    open_fence: Optional[Tuple[str, int]] = None
+    for line in split_lines(text):
+        if open_fence is None:
+            open_fence = _fence_open(line)
+            if open_fence is None:
+                kept.append(line)
+        elif _fence_closes(line, open_fence[0], open_fence[1]):
+            open_fence = None
     return kept
 
 
@@ -168,8 +197,8 @@ def _state_problem(data: TextInput, allowed: tuple) -> Optional[str]:
         return "{0} is malformed: {1}".format(STATE_NAME, status.reason)
     if status.value in allowed:
         return None
-    return "{0} has `Status: {1}`, expected one of: {2}".format(
-        STATE_NAME, status.value, ", ".join(allowed)
+    return "{0} does not hold an allowed `Status:` value, expected one of: {1}".format(
+        STATE_NAME, ", ".join(allowed)
     )
 
 

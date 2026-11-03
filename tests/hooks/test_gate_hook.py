@@ -6,6 +6,8 @@ Ticket: n/a
 
 ChangeLog:
   - Initial version: design tests 10 to 26.
+  - 2026-11-03: ticket token choice, lowercase ids, override hardening, unreadable files,
+    no Status echo.
 """
 from __future__ import annotations
 
@@ -131,7 +133,9 @@ class ArchTests(GateHookBase):
     def test_12_arch_state_routed_blocks(self) -> None:
         self.put("spec", approved_doc())
         self.put("state", state("ROUTED"))
-        self.assertIn("ROUTED", self.blocked(self.run_hook(payload("arch")))["reason"])
+        reason = self.blocked(self.run_hook(payload("arch")))["reason"]
+        self.assertIn("SPEC_APPROVED", reason)
+        self.assertNotIn("ROUTED", reason)
 
 
 class DevTests(GateHookBase):
@@ -161,7 +165,9 @@ class QaTests(GateHookBase):
 
     def test_17_qa_state_in_dev_blocks(self) -> None:
         self.good_chain("IN_DEV")
-        self.assertIn("IN_DEV", self.blocked(self.run_hook(payload("qa")))["reason"])
+        reason = self.blocked(self.run_hook(payload("qa")))["reason"]
+        self.assertIn("DEV_COMPLETE", reason)
+        self.assertNotIn("IN_DEV", reason)
 
 
 class AllowPathTests(GateHookBase):
@@ -191,7 +197,33 @@ class AllowPathTests(GateHookBase):
         link_key = "T-002"
         os.symlink(outside, os.path.join(self.vault, "02-tickets", link_key))
         self.allowed(self.run_hook(payload("arch", args=link_key)))
-        self.assertIn("outside", self.log_text())
+        self.assertIn("no ticket id", self.log_text())
+
+    def test_20f_trailing_punctuation_does_not_skip_the_gate(self) -> None:
+        self.put("state", state("ROUTED"))
+        for args in ("T-001,", "(T-001)", "T-001.", "'T-001';"):
+            self.blocked(self.run_hook(payload("arch", args=args)))
+
+    def test_20g_symlinked_folder_does_not_hide_a_later_real_ticket(self) -> None:
+        self.put("state", state("ROUTED"))
+        outside = os.path.join(self._tmp.name, "elsewhere")
+        os.makedirs(outside)
+        os.symlink(outside, os.path.join(self.vault, "02-tickets", "T-002"))
+        self.blocked(self.run_hook(payload("arch", args="T-002 T-001")))
+
+    def test_20c_first_token_with_a_folder_is_used(self) -> None:
+        self.put("state", state("ROUTED"))
+        self.blocked(self.run_hook(payload("arch", args="UTF-8 T-001")))
+        self.blocked(self.run_hook(payload("arch", args="T-001 UTF-8")))
+
+    def test_20d_token_without_a_folder_is_no_ticket(self) -> None:
+        self.put("state", state("ROUTED"))
+        self.allowed(self.run_hook(payload("arch", args="UTF-8")))
+        self.assertIn("no ticket id", self.log_text())
+
+    def test_20e_lowercase_id_still_gated(self) -> None:
+        self.put("state", state("ROUTED"))
+        self.blocked(self.run_hook(payload("arch", args="t-001")))
 
     def test_21_prefix_unset_allowed_and_logged(self) -> None:
         self.allowed(self.run_hook(payload("arch"), drop=["ARBITER_SKILL_PREFIX"]))
@@ -265,6 +297,59 @@ class OverrideTests(GateHookBase):
         self.blocked(self.run_hook(payload("arch")))
 
 
+class OverrideHardeningTests(GateHookBase):
+    def setUp(self) -> None:
+        super().setUp()
+        self.put("state", state("ROUTED"))
+        self.line = "Override: arch {0} hotfix".format(TODAY.isoformat())
+
+    def test_24e_override_inside_a_fence_is_ignored(self) -> None:
+        self.put("gate-override", "```\n{0}\n```\n".format(self.line))
+        self.blocked(self.run_hook(payload("arch")))
+        self.put("gate-override", "~~~\n{0}\n```\n".format(self.line))
+        self.blocked(self.run_hook(payload("arch")))
+
+    def test_24f_override_after_a_closed_fence_counts(self) -> None:
+        self.put("gate-override", "```\ncode\n```\n{0}\n".format(self.line))
+        self.allowed(self.run_hook(payload("arch")))
+
+    def test_24g_symlinked_override_is_refused_and_logged(self) -> None:
+        real = os.path.join(self._tmp.name, "real-override.md")
+        with open(real, "w", encoding="utf-8") as handle:
+            handle.write(self.line + "\n")
+        os.symlink(real, os.path.join(self.ticket_dir, "T-001-gate-override.md"))
+        self.blocked(self.run_hook(payload("arch")))
+        self.assertIn("override_refused", self.log_text())
+
+    def test_24h_bom_before_override_line_still_counts(self) -> None:
+        self.put("gate-override", "\ufeff" + self.line + "\n")
+        self.allowed(self.run_hook(payload("arch")))
+
+    def test_24i_unicode_digit_date_does_not_count(self) -> None:
+        wide = "".join(chr(0xFF10 + int(ch)) if ch.isdigit() else ch for ch in TODAY.isoformat())
+        self.put("gate-override", "Override: arch {0} hotfix\n".format(wide))
+        self.blocked(self.run_hook(payload("arch")))
+
+
+class UnreadableFileTests(GateHookBase):
+    def test_27_permission_denied_is_reported_apart_from_missing(self) -> None:
+        if os.geteuid() == 0:
+            self.skipTest("root can read any file")
+        self.put("spec", approved_doc())
+        state_path = self.put("state", state("SPEC_APPROVED"))
+        os.chmod(state_path, 0)
+        self.addCleanup(os.chmod, state_path, 0o600)
+        reason = self.blocked(self.run_hook(payload("arch")))["reason"]
+        self.assertIn("permission denied", reason)
+        self.assertIn(state_path, reason)
+        self.assertIn("unreadable", self.log_text())
+
+    def test_27b_missing_file_is_not_called_unreadable(self) -> None:
+        self.put("spec", approved_doc())
+        reason = self.blocked(self.run_hook(payload("arch")))["reason"]
+        self.assertNotIn("permission denied", reason)
+
+
 class ConcurrencyAndLeakTests(GateHookBase):
     def test_25_reader_never_sees_a_half_written_state_file(self) -> None:
         self.put("spec", approved_doc())
@@ -295,6 +380,14 @@ class ConcurrencyAndLeakTests(GateHookBase):
         self.assertNotIn(SECRET_MARKER, result.stdout)
         self.assertNotIn(SECRET_MARKER, result.stderr)
         self.assertNotIn(SECRET_MARKER, self.log_text())
+
+    def test_26b_block_message_never_prints_the_status_value(self) -> None:
+        self.put("spec", approved_doc())
+        self.put("state", state("UNIQUE_STATUS_VALUE_55"))
+        result = self.run_hook(payload("arch"))
+        self.blocked(result)
+        self.assertNotIn("UNIQUE_STATUS_VALUE_55", result.stdout)
+        self.assertNotIn("UNIQUE_STATUS_VALUE_55", self.log_text())
 
 
 class FixtureTests(GateHookBase):

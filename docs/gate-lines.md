@@ -64,7 +64,7 @@ It follows the same grammar as the approval line with the word `Validated`. The 
 
 ## Placement rule
 
-A gate line counts only when it is outside fenced code blocks, at the start of a line. A placeholder never counts. Placeholders are written so they do not begin with `Approved` or `Validated`, for example `Approval pending.` Square brackets and a missing date never match the grammar.
+A gate line counts only when it is outside fenced code blocks, at the start of a line. A fence opens with 3 or more backticks or tildes and closes only with the same character, at least as many markers and no text after them. Dates use ASCII digits. A placeholder never counts. Placeholders are written so they do not begin with `Approved` or `Validated`, for example `Approval pending.` Square brackets and a missing date never match the grammar.
 
 ## Last block applied
 

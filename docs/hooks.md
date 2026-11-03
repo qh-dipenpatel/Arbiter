@@ -225,6 +225,8 @@ flowchart TD
 
 **False positive guard:** Path comparison uses a trailing slash on both sides (`/code/` vs `/codebackup/`) so a directory whose name starts with the code dir name does not trigger a false block.
 
+**Gate override files:** the same hook denies any model write to a file named `*-gate-override.md` (any letter case, also through a symlink), with the message that the owner creates it from a terminal. This check runs first, so it holds even when `ARBITER_CODE_DIR` is unset. The Bash tool is not covered: a shell command can still create the file, so the override is a guard against accidents, not against a determined actor. See section 13 for the terminal command.
+
 ---
 
 ## 5. pre-compact-checkpoint-warn.sh
@@ -505,7 +507,11 @@ Blocks Bash commands that write into the read-only code directory (`ARBITER_CODE
 Blocks the arch, dev and qa chain skills (`<prefix>-arch`, `<prefix>-dev`, `<prefix>-qa`) when the earlier approval lines in the ticket's state, spec, design and edge case files are missing. The rules live in `hooks/gate_rules.py`, a helper that is not a hook. Needs `ARBITER_SKILL_PREFIX` (written by the installer) and `ARBITER_KNOWLEDGE`; if either is unset, or the command is not a gated skill, or no ticket id is in the arguments, it allows and logs. A block is `{"decision": "block", "reason": ...}` on stdout with exit 0, and the reason names the failed rule, the files, the skill to run first and the override file. Detail: [docs/hooks/pre-prompt-expansion-check-gates.md](hooks/pre-prompt-expansion-check-gates.md) and [docs/gate-lines.md](gate-lines.md).
 
 - **Fail open:** any internal error is logged and the command is allowed (see "Fail closed vs fail open").
-- **Override file:** `02-tickets/{KEY}/{KEY}-gate-override.md` containing `Override: <skill> YYYY-MM-DD <reason>`. It is valid for that skill and that date only, needs a reason, and each use is logged.
+- **Override file:** `02-tickets/{KEY}/{KEY}-gate-override.md` containing `Override: <skill> YYYY-MM-DD <reason>`. It is valid for that skill and that date only, needs a reason, and each use is logged. Lines inside fenced code blocks are ignored, a symlinked override file is refused, and a leading BOM is stripped.
+- **Create it from a terminal:** the write guard (section 4) blocks model writes to this file, so the owner creates it by hand. Example with the fake ticket `T-001`: `printf 'Override: arch %s hotfix for demo\n' "$(date +%F)" >> "$ARBITER_KNOWLEDGE/02-tickets/T-001/T-001-gate-override.md"`. The Bash tool remains an uncovered route.
+- **Audit log line:** one line per event in the log, `<YYYY-MM-DDTHH:MM:SS> <event> <detail>`. Events: `override <skill> <KEY>` (an override let a skill through), `block <skill> <KEY>` (adds ` unreadable` when a file was permission denied), `override_refused symlink <KEY>`, `allow <reason>`, `fail_open <ErrorName>: <message>`. Example: `2026-11-03T09:15:02 override arch T-001`.
+- **Ticket id choice:** every argument token that looks like an id is a candidate (case insensitive, uppercased); the first whose folder exists under `02-tickets` is used, so a token like `UTF-8` is skipped. If none has a folder the command is allowed and logged.
+- **Block message:** names the expected value and the file paths, never anything read from a file (not even the `Status:` value). A file that exists but cannot be read (permission denied) is named apart from a missing one.
 - **Log:** `ARBITER_GATE_LOG`, default `~/.arbiter/state/gate_check.log`.
 - **Existing users:** re-run the installer. It adds `ARBITER_SKILL_PREFIX` to the settings `env` block and wires the hook; without the variable the hook allows everything.
 
