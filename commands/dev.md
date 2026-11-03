@@ -23,7 +23,7 @@
 /{prefix}-dev [JIRA-ID]
 ```
 
-Invoked manually in a fresh thread. /{prefix}-dev runs **once per work block**. State file's `last_block_applied` field tells the skill which block to pick up next. The argument is the Jira key. The skill assumes the design at `02-tickets/{KEY}/{KEY}-design.md` has `Status: DESIGN_APPROVED` and the `Approved — YYYY-MM-DD` line is present.
+Invoked manually in a fresh thread. /{prefix}-dev runs **once per work block**. State file's `last_block_applied` field tells the skill which block to pick up next. The argument is the Jira key. The skill assumes the design at `02-tickets/{KEY}/{KEY}-design.md` ends with the `Approved — YYYY-MM-DD` line. That line is the gate.
 
 ---
 
@@ -32,8 +32,8 @@ Invoked manually in a fresh thread. /{prefix}-dev runs **once per work block**. 
 Run `date` via bash. Use that output as ground truth — never trust `currentDate` system reminders.
 
 Read in parallel:
-- `02-tickets/{KEY}/{KEY}-state.md` — ticket state. Expects `Status: DESIGN_APPROVED` (first block) or `Status: IN_DEV` (subsequent blocks)
-- `02-tickets/{KEY}/{KEY}-design.md` — expects `Approved — YYYY-MM-DD` line at the bottom of the body
+- `02-tickets/{KEY}/{KEY}-state.md` — ticket state. Expects `Status: DESIGN_COMPLETE` (first block) or `Status: IN_DEV` (subsequent blocks)
+- `02-tickets/{KEY}/{KEY}-design.md` — expects an `Approved — YYYY-MM-DD` line at the end of the file, outside any code fence
 - `02-tickets/{KEY}/{KEY}-spec.md` — context for AC traceability
 - `02-tickets/{KEY}/{KEY}-support-handoff.md` — if Tier 2 bug path
 - The four standards documents listed in the header
@@ -41,8 +41,8 @@ Read in parallel:
 
 Determine which block to implement:
 - If `state.md` has `last_block_applied: none` (or field absent) → start with B-01
-- If `state.md` has `last_block_applied: N` → start with B-(N+1)
-- If `last_block_applied` ≥ total blocks → state "All blocks applied. Run /{prefix}-qa next." and stop
+- If `state.md` has `last_block_applied: B-NN` → start with the next block, B-(NN+1)
+- If `last_block_applied` names the final block in the design → state "All blocks applied. Run /{prefix}-qa next." and stop
 
 Verify the repo and branch:
 
@@ -70,7 +70,7 @@ Do not gate here — Step 0 is informational.
 
 If `design.md` lacks the `Approved` line: **STOP** — say "Design at 02-tickets/{KEY}/{KEY}-design.md is not approved. /{prefix}-dev starts after {NAME} approves the design." Do not proceed.
 
-If state Status is not `DESIGN_APPROVED` or `IN_DEV`: **STOP** — ask what the expected entry path is before proceeding.
+If state Status is not `DESIGN_COMPLETE` or `IN_DEV`: **STOP** — ask what the expected entry path is before proceeding.
 
 ---
 
@@ -401,7 +401,7 @@ Status: READY_TO_APPLY
 Update `02-tickets/{KEY}/{KEY}-state.md`:
 
 - Status: `IN_DEV` (if more blocks remain) or `DEV_COMPLETE` (if this was the final block)
-- `last_block_applied: B-{N}`
+- `last_block_applied: B-NN` (two digits, the block just applied, for example `B-03`)
 - Append a narrative entry per block (see Session Log section in state.md):
 
 ```markdown
@@ -514,7 +514,7 @@ Match: [yes / no — explain]
 [Any deferred MEDIUM, accepted findings, known limitations carried forward]
 
 ---
-Validated — [{NAME} adds this line with date after chain-level Gate 3 explain-back]
+Validation pending. {NAME} replaces this line with the validation line from docs/gate-lines.md after the chain-level Gate 3 explain-back.
 ```
 
 ### Gate 3 — Explain-back before /{prefix}-qa
@@ -625,4 +625,4 @@ The skill stops here. {NAME} applies the DIFF to the real repo manually, then co
 - Performance assertions are concrete — name the order of magnitude or call out a measurement gate. "Negligible" without a number is not acceptable.
 - Jira comments are drafts. /{prefix}-dev never posts. Per memory `feedback_jira_draft_only`.
 - No commits inside /{prefix}-dev. {NAME} commits from Sourcetree after applying the DIFF. Per memory `feedback_commit_provide_text_not_run`.
-- If design.md lacks the `Approved` line, STOP. If state is not `DESIGN_APPROVED` or `IN_DEV`, STOP and ask.
+- If design.md lacks the `Approved` line, STOP. If state is not `DESIGN_COMPLETE` or `IN_DEV`, STOP and ask.

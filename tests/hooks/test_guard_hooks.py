@@ -6,6 +6,7 @@ Scope: tests for the read before write guard, the PR create gate and the git pre
 Ticket: none (Arbiter is not Jira tracked)
 ChangeLog:
   2026-10-13  Created.
+  2026-11-03  Added gate override file write block tests.
   2026-11-01  Added code dir guard (Write and Bash) and extended Databricks gate tests.
 
 Run: python3 -m unittest tests/hooks/test_guard_hooks.py
@@ -223,6 +224,57 @@ class CodeDirWriteGuard(unittest.TestCase):
 
     def test_bash_known_limit_variable_expanded_later_not_caught(self) -> None:
         self.assertEqual(self.bash(f"D={self.code}/repo; touch $D/f"), "")
+
+
+class GateOverrideWriteGuard(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.ticket_dir = os.path.realpath(os.path.join(self.tmp.name, "02-tickets", "T-001"))
+        os.makedirs(self.ticket_dir)
+        self.code = os.path.realpath(os.path.join(self.tmp.name, "code"))
+        os.makedirs(self.code)
+        self.env = {"ARBITER_CODE_DIR": self.code}
+
+    def verdict(self, path: str, tool: str = "Write", env: dict | None = None) -> subprocess.CompletedProcess:
+        return run(WRITE_GUARD, payload(tool, file_path=path), env or self.env)
+
+    def test_write_edit_multiedit_to_override_file_denied_with_terminal_message(self) -> None:
+        target = os.path.join(self.ticket_dir, "T-001-gate-override.md")
+        for tool in ("Write", "Edit", "MultiEdit"):
+            result = self.verdict(target, tool)
+            self.assertEqual(decision(result), "deny", tool)
+            self.assertIn("terminal", result.stdout)
+
+    def test_denied_even_when_code_dir_is_unset(self) -> None:
+        clean = {k: v for k, v in os.environ.items() if k != "ARBITER_CODE_DIR"}
+        result = subprocess.run([os.path.join(HOOKS, WRITE_GUARD)],
+                                input=payload("Write", file_path="/x/T-001-gate-override.md"),
+                                capture_output=True, text=True, env=clean)
+        self.assertEqual(decision(result), "deny")
+
+    def test_case_variants_are_denied(self) -> None:
+        target = os.path.join(self.ticket_dir, "T-001-GATE-Override.MD")
+        self.assertEqual(decision(self.verdict(target)), "deny")
+
+    def test_symlink_to_override_file_is_denied(self) -> None:
+        real = os.path.join(self.ticket_dir, "T-001-gate-override.md")
+        link = os.path.join(self.ticket_dir, "innocent.md")
+        os.symlink(real, link)
+        self.assertEqual(decision(self.verdict(link)), "deny")
+
+    def test_notebook_edit_path_key_is_checked(self) -> None:
+        target = os.path.join(self.ticket_dir, "T-001-gate-override.md")
+        result = run(WRITE_GUARD, payload("NotebookEdit", notebook_path=target), self.env)
+        self.assertEqual(decision(result), "deny")
+
+    def test_other_ticket_files_and_lookalike_names_allowed(self) -> None:
+        for name in ("T-001-state.md", "T-001-gate-override.md.bak", "gate-override.txt", "T-001-gate-overrides.md"):
+            result = self.verdict(os.path.join(self.ticket_dir, name))
+            self.assertEqual(decision(result), "", name)
+
+    def test_code_dir_block_still_works(self) -> None:
+        self.assertEqual(decision(self.verdict(os.path.join(self.code, "a.py"))), "deny")
 
 
 class DatabricksGateExtended(unittest.TestCase):

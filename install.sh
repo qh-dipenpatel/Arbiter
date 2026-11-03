@@ -1327,7 +1327,7 @@ if [ -e "$CLAUDE_DIR/settings.json" ]; then
 fi
 python3 "$REPO_DIR/installer/merge_settings.py" \
   "$REPO_DIR/settings.json" "$CLAUDE_DIR/settings.json" \
-  "$REPO_DIR" "$VAULT_DIR" "$SCRIPTS_DIR" "${CODE_DIR:-}"
+  "$REPO_DIR" "$VAULT_DIR" "$SCRIPTS_DIR" "${CODE_DIR:-}" "$SKILL_PREFIX"
 ok "Settings merged (hooks active globally, your own settings kept)"
 
 # ── Verify Claude Code hooks ──────────────────────────────────────────────────

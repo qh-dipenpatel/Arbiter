@@ -1,0 +1,1 @@
+{"command_name": "ex-arch", "command_args": "T-001", "command_source": "user", "cwd": "/tmp/example", "expansion_type": "slash_command", "hook_event_name": "UserPromptExpansion", "permission_mode": "default", "prompt": "/ex-arch T-001", "prompt_id": "example-prompt-id", "session_id": "example-session-id", "transcript_path": "/tmp/example/transcript.jsonl"}

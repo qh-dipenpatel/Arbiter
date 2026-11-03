@@ -254,6 +254,50 @@ class SettingsMerge(unittest.TestCase):
         self.assertEqual(cmds, ["~/mine.sh", '"/new/hooks/pre-tool-write-scan-phi.py"'])
         self.assertEqual(merge_settings.merge(out, template, {"ARBITER_CODE_DIR": "/c"}), out)
 
+    def test_cli_writes_skill_prefix_and_keeps_user_hooks(self) -> None:
+        user = {"env": {"MINE": "1"}, "hooks": {"UserPromptSubmit": [
+            {"hooks": [{"type": "command", "command": "~/mine.sh"}]}]}}
+        with tempfile.TemporaryDirectory() as tmp:
+            target = os.path.join(tmp, "settings.json")
+            with open(target, "w") as fh:
+                json.dump(user, fh)
+            args = [os.path.join(REPO, "settings.json"), target, REPO, "/v", "/s", "/c"]
+            for _ in range(2):
+                self.assertEqual(merge_settings.main(["merge_settings.py", *args, "zz"]), 0)
+            with open(target) as fh:
+                out = json.load(fh)
+            self.assertEqual(out["env"]["ARBITER_SKILL_PREFIX"], "zz")
+            self.assertEqual(out["env"]["MINE"], "1")
+            cmds = [h["command"] for g in out["hooks"]["UserPromptSubmit"] for h in g["hooks"]]
+            self.assertIn("~/mine.sh", cmds)
+            expansion = [h["command"] for g in out["hooks"]["UserPromptExpansion"] for h in g["hooks"]]
+            self.assertEqual(len(expansion), 1)
+            self.assertIn("pre-prompt-expansion-check-gates.py", expansion[0])
+            self.assertEqual(merge_settings.main(["merge_settings.py", *args]), 0)
+            with open(target) as fh:
+                self.assertEqual(json.load(fh)["env"]["ARBITER_SKILL_PREFIX"], "zz")
+
+    def test_cli_empty_prefix_removes_variable_and_omitted_keeps_it(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = os.path.join(tmp, "settings.json")
+            args = [os.path.join(REPO, "settings.json"), target, REPO, "/v", "/s", "/c"]
+            self.assertEqual(merge_settings.main(["merge_settings.py", *args, "zz"]), 0)
+            self.assertEqual(merge_settings.main(["merge_settings.py", *args]), 0)
+            with open(target) as fh:
+                self.assertEqual(json.load(fh)["env"]["ARBITER_SKILL_PREFIX"], "zz")
+            self.assertEqual(merge_settings.main(["merge_settings.py", *args, ""]), 0)
+            with open(target) as fh:
+                self.assertNotIn("ARBITER_SKILL_PREFIX", json.load(fh)["env"])
+
+    def test_cli_whitespace_prefix_is_treated_as_empty(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = os.path.join(tmp, "settings.json")
+            args = [os.path.join(REPO, "settings.json"), target, REPO, "/v", "/s", "/c"]
+            self.assertEqual(merge_settings.main(["merge_settings.py", *args, "zz"]), 0)
+            self.assertEqual(merge_settings.main(["merge_settings.py", *args, "   "]), 0)
+            with open(target) as fh:
+                self.assertNotIn("ARBITER_SKILL_PREFIX", json.load(fh)["env"])
+
     def test_placeholders_json_safe(self) -> None:
         out = merge_settings.substitute({"c": '"$CLAUDE_DOTFILES/hooks/x.py"'}, {"$CLAUDE_DOTFILES": 'C:\\a "b"'})
         self.assertEqual(json.loads(json.dumps(out))["c"], '"C:\\a "b"/hooks/x.py"')

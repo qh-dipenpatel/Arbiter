@@ -59,7 +59,7 @@ State the chosen key and the basis (supplied, single candidate, or most recent) 
 
 ### Read the handoff block
 
-Read the state file. Find the `## Skill Handoff State` heading. The block runs to the next `## ` heading or the end of the file. Read `Status`, `Confirmed approach`, `Root cause`, `Open questions`, and any other fields present. These supply the context for the starter prompt. This skill does not change them.
+Read the state file. Find the `## Skill Handoff State` heading. The block runs to the next `## ` heading or the end of the file. Read `Status` (the first `Status:` line in the file, inside or outside the block), `Confirmed approach`, `Root cause`, `Open questions`, and any other fields present. These supply the context for the starter prompt. This skill does not change them.
 
 If the block is missing, this skill adds it at the end of the file in Step 2. It adds only the three fields listed there.
 
@@ -113,7 +113,7 @@ Wait for explicit confirmation. If the user cancels here, write nothing and repo
 
 Make targeted edits with the Edit tool. Do not rewrite the whole file. Inside the `## Skill Handoff State` block, upsert three fields and leave every other line as it is.
 
-1. **`Next skill: /{next skill} [JIRA-ID]`.** Replace the existing `Next skill:` line. If there is none, insert it directly after the `Status:` line. If the block was just added, insert it right after the heading.
+1. **`Next skill: /{next skill} [JIRA-ID]`.** Replace the existing `Next skill:` line. If there is none, insert it directly after the `Status:` line when that line is inside the block, otherwise directly after the block heading. If the block was just added, insert it right after the heading.
 2. **`Starter prompt:`** followed by a fenced code block that holds the prompt from Step 1. Replace the existing field and its fence if present. If absent, insert it directly before `Last updated:`. If `Last updated:` is also absent, insert it directly after the `Next skill:` line.
 3. **`Last updated: [today]`.** Use the `date` output from Step 0. Replace the existing line. If absent, append it as the last line of the block, after the fenced starter prompt.
 

@@ -27,6 +27,7 @@ HOOKS_DIR = REPO / "hooks"
 SETTINGS = REPO / "settings.json"
 DOC = REPO / "docs" / "hooks.md"
 HELPERS = frozenset({
+    "gate_rules.py",
     "phi_patterns.py",
     "read_guard_common.py",
     "sql_summary.py",

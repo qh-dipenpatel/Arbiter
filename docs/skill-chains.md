@@ -96,7 +96,7 @@ Before a weekly client call.
 
 ## How State Carries Forward
 
-Each skill writes a state file in the vault at `02-tickets/{BOARD}/{ID}-state.md`. The next skill reads this file to pick up where the last session left off.
+Each skill writes a state file in the vault at `02-tickets/{KEY}/{KEY}-state.md`. The exact lines the skills write and check are listed in `docs/gate-lines.md`. The next skill reads this file to pick up where the last session left off.
 
 If you close a session without `/close`, the state file may be stale. Run `/sync` at the start of the next session to verify state before continuing.
 

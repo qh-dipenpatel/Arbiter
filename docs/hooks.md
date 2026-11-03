@@ -36,6 +36,7 @@ Controls that must prevent exposure belong in PreToolUse. PostToolUse is a secon
 - `pre-tool-bash-databricks-ask.py` fails to `ask`.
 - `pre-tool-bash-scan-phi.py` **fails closed** (owner decision, 2026-11-01). Bad JSON, an import error, or any exception denies the command with an "internal error" message. It used to fail open so Bash could be the recovery path; that path is gone, see Recovery.
 - `pre-tool-bash-gate-pr-create.py` fails open on internal errors, except that a command it cannot parse falls back to a text match.
+- `pre-prompt-expansion-check-gates.py` **fails open** (design decision). Bad JSON, an import error of `gate_rules.py`, a rule error or any other exception is logged as `fail_open` and the command goes ahead. A broken gate check must not lock you out of the chain skills; the cost is that a bug lets a skill start without its approval lines, so read the log (below) now and then.
 - `pre-tool-write-require-read.py` and `post-tool-read-record.py` fail open: a logging or parsing problem never blocks work.
 
 **What fail closed covers.** The two PHI pre hooks deny when they catch an error themselves: bad or wrongly shaped input, a missing or broken `phi_patterns.py`, or any exception inside the scan. Claude Code treats a hook that cannot start, exits with a code other than 0 or 2, prints invalid output, or is cancelled by its timeout as a non blocking error, and the action goes ahead (source: Claude Code hooks documentation, checked 2026-11-02). So a hook file with a syntax error, or a missing `python3`, does not block. Timeouts: the documented default for a command hook is 600 seconds, and `settings.json` sets none on these hooks. Measured scan times are in "PHI scan speed limits" below.
@@ -66,8 +67,10 @@ flowchart TD
   O["pre-tool-bash-gate-pr-create.py"]
   P["pre-tool-write-require-read.py"]
   Q["post-tool-read-record.py"]
+  R["pre-prompt-expansion-check-gates.py"]
 
   A --> B --> C --> D
+  A -- "typed slash command" --> R --> C
   D -- "Write / Edit / MultiEdit" --> E --> F --> P --> G
   D -- "Bash" --> M --> N --> O --> G
   G -- "Read" --> Q --> J
@@ -78,7 +81,7 @@ flowchart TD
   C --> K --> L
 
   class A actor
-  class B,E,F,H,I,L,M,N,O,P,Q core
+  class B,E,F,H,I,L,M,N,O,P,Q,R core
 ```
 
 ---
@@ -221,6 +224,8 @@ flowchart TD
 ```
 
 **False positive guard:** Path comparison uses a trailing slash on both sides (`/code/` vs `/codebackup/`) so a directory whose name starts with the code dir name does not trigger a false block.
+
+**Gate override files:** the same hook denies any model write to a file named `*-gate-override.md` (any letter case, also through a symlink), with the message that the owner creates it from a terminal. This check runs first, so it holds even when `ARBITER_CODE_DIR` is unset. The Bash tool is not covered: a shell command can still create the file, so the override is a guard against accidents, not against a determined actor. See section 13 for the terminal command.
 
 ---
 
@@ -495,7 +500,22 @@ Blocks Bash commands that write into the read-only code directory (`ARBITER_CODE
 
 > **Known limit:** it matches path text. Other variables expanded later, command substitution, obfuscated paths and writes made by an interpreter (for example `python -c`) pass.
 
-## 13. Git hooks (not Claude Code hooks)
+## 13. pre-prompt-expansion-check-gates.py
+
+**Event:** UserPromptExpansion, fires when a typed slash command expands. No matcher: the script decides itself whether the command is a gated chain skill.
+
+Blocks the arch, dev and qa chain skills (`<prefix>-arch`, `<prefix>-dev`, `<prefix>-qa`) when the earlier approval lines in the ticket's state, spec, design and edge case files are missing. The rules live in `hooks/gate_rules.py`, a helper that is not a hook. Needs `ARBITER_SKILL_PREFIX` (written by the installer) and `ARBITER_KNOWLEDGE`; if either is unset, or the command is not a gated skill, or no ticket id is in the arguments, it allows and logs. A block is `{"decision": "block", "reason": ...}` on stdout with exit 0, and the reason names the failed rule, the files, the skill to run first and the override file. Detail: [docs/hooks/pre-prompt-expansion-check-gates.md](hooks/pre-prompt-expansion-check-gates.md) and [docs/gate-lines.md](gate-lines.md).
+
+- **Fail open:** any internal error is logged and the command is allowed (see "Fail closed vs fail open").
+- **Override file:** `02-tickets/{KEY}/{KEY}-gate-override.md` containing `Override: <skill> YYYY-MM-DD <reason>`. It is valid for that skill and that date only, needs a reason, and each use is logged. Lines inside fenced code blocks are ignored, a symlinked override file is refused, and a leading BOM is stripped.
+- **Create it from a terminal:** the write guard (section 4) blocks model writes to this file, so the owner creates it by hand. Example with the fake ticket `T-001`: `printf 'Override: arch %s hotfix for demo\n' "$(date +%F)" >> "$ARBITER_KNOWLEDGE/02-tickets/T-001/T-001-gate-override.md"`. The Bash tool remains an uncovered route.
+- **Audit log line:** one line per event in the log, `<YYYY-MM-DDTHH:MM:SS> <event> <detail>`. Events: `override <skill> <KEY>` (an override let a skill through), `block <skill> <KEY>` (adds ` unreadable` when a file was permission denied), `override_refused symlink <KEY>`, `allow <reason>`, `fail_open <ErrorName>: <message>`. Example: `2026-11-03T09:15:02 override arch T-001`.
+- **Ticket id choice:** every argument token that looks like an id is a candidate (case insensitive, uppercased); the first whose folder exists under `02-tickets` is used, so a token like `UTF-8` is skipped. If none has a folder the command is allowed and logged.
+- **Block message:** names the expected value and the file paths, never anything read from a file (not even the `Status:` value). A file that exists but cannot be read (permission denied) is named apart from a missing one.
+- **Log:** `ARBITER_GATE_LOG`, default `~/.arbiter/state/gate_check.log`.
+- **Existing users:** re-run the installer. It adds `ARBITER_SKILL_PREFIX` to the settings `env` block and wires the hook; without the variable the hook allows everything.
+
+## 14. Git hooks
 
 `hooks/git-pre-push` blocks pushes to protected branches (`ARBITER_PROTECTED_BRANCHES`, default `main master`) and can run an optional check. `hooks/pre-commit-secrets` blocks commits whose staged diff contains known token patterns. Neither is in `settings.json`; copy them into a repo's `.git/hooks/` (see `install.sh`). They are exempt from the wiring check in `tests/hooks/check_hook_inventory.py`.
 
