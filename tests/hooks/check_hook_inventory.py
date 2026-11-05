@@ -5,12 +5,14 @@ Date: 2026-11-01
 Scope: fail when hooks/, settings.json and docs/hooks.md disagree about which hooks exist
 Ticket: none (Arbiter is not Jira tracked)
 ChangeLog:
+  2026-11-04  Added check 4: PHI scan hooks must set onFailure block.
   2026-11-01  Created.
 
 Checks:
   1. every hook file in hooks/ is wired in settings.json (unless allowlisted as a helper)
   2. every hook file in hooks/ is mentioned in docs/hooks.md
   3. every hook file settings.json points at exists
+  4. the PHI scan hooks in settings.json set "onFailure": "block"
 
 Run: python3 tests/hooks/check_hook_inventory.py   (exit 0 = consistent, 1 = drift)
 """
@@ -35,6 +37,10 @@ HELPERS = frozenset({
     "git-pre-push",
     "pre-commit-secrets",
 })
+PHI_BLOCKING_HOOKS = frozenset({
+    "pre-tool-write-scan-phi.py",
+    "pre-tool-bash-scan-phi.py",
+})
 HOOK_REF_RE = re.compile(r"hooks/([A-Za-z0-9_.-]+)")
 
 
@@ -50,6 +56,23 @@ def wired_names(settings: dict) -> set[str]:
     return names
 
 
+def phi_hooks_not_blocking(settings: dict) -> list[str]:
+    """PHI scan hook entries that do not set onFailure to block."""
+    found: set[str] = set()
+    problems: list[str] = []
+    for groups in settings.get("hooks", {}).values():
+        for group in groups:
+            for hook in group.get("hooks", []):
+                match = HOOK_REF_RE.search(hook.get("command", ""))
+                if not match or match.group(1) not in PHI_BLOCKING_HOOKS:
+                    continue
+                found.add(match.group(1))
+                if hook.get("onFailure") != "block":
+                    problems.append(f"hooks/{match.group(1)} must set onFailure to block in settings.json")
+    problems += [f"hooks/{n} is missing from settings.json" for n in sorted(PHI_BLOCKING_HOOKS - found)]
+    return problems
+
+
 def hook_files() -> set[str]:
     """Hook file names in hooks/, ignoring caches and hidden files."""
     return {p.name for p in HOOKS_DIR.iterdir() if p.is_file() and not p.name.startswith(".")}
@@ -58,9 +81,11 @@ def hook_files() -> set[str]:
 def find_problems() -> list[str]:
     """Return one message per inventory mismatch."""
     files = hook_files()
-    wired = wired_names(json.loads(SETTINGS.read_text(encoding="utf-8")))
+    settings = json.loads(SETTINGS.read_text(encoding="utf-8"))
+    wired = wired_names(settings)
     doc = DOC.read_text(encoding="utf-8")
     problems = [f"settings.json references missing file: hooks/{n}" for n in sorted(wired - files)]
+    problems += phi_hooks_not_blocking(settings)
     for name in sorted(files - HELPERS):
         if name not in wired:
             problems.append(f"hooks/{name} is not wired in settings.json")
