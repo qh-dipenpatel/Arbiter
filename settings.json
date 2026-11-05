@@ -28,7 +28,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_DOTFILES/hooks/pre-tool-write-scan-phi.py\""
+            "command": "\"$CLAUDE_DOTFILES/hooks/pre-tool-write-scan-phi.py\"",
+            "onFailure": "block"
           }
         ]
       },
@@ -46,7 +47,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_DOTFILES/hooks/pre-tool-bash-scan-phi.py\""
+            "command": "\"$CLAUDE_DOTFILES/hooks/pre-tool-bash-scan-phi.py\"",
+            "onFailure": "block"
           }
         ]
       },
