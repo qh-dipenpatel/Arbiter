@@ -428,6 +428,8 @@ Per-spec additions:
 - Related tickets: [keys]
 - Schema files: [vault paths]
 
+---
+Approved - YYYY-MM-DD
 ```
 
 ### State file update
