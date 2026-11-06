@@ -38,6 +38,7 @@ Controls that must prevent exposure belong in PreToolUse. PostToolUse is a secon
 - `pre-tool-bash-gate-pr-create.py` fails open on internal errors, except that a command it cannot parse falls back to a text match.
 - `pre-prompt-expansion-check-gates.py` **fails open** (design decision). Bad JSON, an import error of `gate_rules.py`, a rule error or any other exception is logged as `fail_open` and the command goes ahead. A broken gate check must not lock you out of the chain skills; the cost is that a bug lets a skill start without its approval lines, so read the log (below) now and then.
 - `pre-tool-write-require-read.py` and `post-tool-read-record.py` fail open: a logging or parsing problem never blocks work.
+- `pre-tool-read-ask-sensitive-path.py` **fails closed**. Bad input or any exception denies the read, and its `settings.json` entry sets `onFailure: block`.
 
 **What fail closed covers.** The two PHI pre hooks deny when they catch an error themselves: bad or wrongly shaped input, a missing or broken `phi_patterns.py`, or any exception inside the scan. Claude Code treats a hook that cannot start, exits with a code other than 0 or 2, prints invalid output, or is cancelled by its timeout as a non blocking error, and the action goes ahead (source: Claude Code hooks documentation, checked 2026-11-02). So a hook file with a syntax error, or a missing `python3`, does not block. Timeouts: the documented default for a command hook is 600 seconds, and `settings.json` sets none on these hooks. Measured scan times are in "PHI scan speed limits" below.
 
@@ -68,11 +69,13 @@ flowchart TD
   P["pre-tool-write-require-read.py"]
   Q["post-tool-read-record.py"]
   R["pre-prompt-expansion-check-gates.py"]
+  S["pre-tool-read-ask-sensitive-path.py"]
 
   A --> B --> C --> D
   A -- "typed slash command" --> R --> C
   D -- "Write / Edit / MultiEdit" --> E --> F --> P --> G
   D -- "Bash" --> M --> N --> O --> G
+  D -- "Read" --> S --> G
   G -- "Read" --> Q --> J
   D -- "All other tools" --> G
   G -- "Bash output" --> H --> J
@@ -81,7 +84,7 @@ flowchart TD
   C --> K --> L
 
   class A actor
-  class B,E,F,H,I,L,M,N,O,P,Q,R core
+  class B,E,F,H,I,L,M,N,O,P,Q,R,S core
 ```
 
 ---
@@ -515,7 +518,32 @@ Blocks the arch, dev and qa chain skills (`<prefix>-arch`, `<prefix>-dev`, `<pre
 - **Log:** `ARBITER_GATE_LOG`, default `~/.arbiter/state/gate_check.log`.
 - **Existing users:** re-run the installer. It adds `ARBITER_SKILL_PREFIX` to the settings `env` block and wires the hook; without the variable the hook allows everything.
 
-## 14. Git hooks
+## 14. pre-tool-read-ask-sensitive-path.py
+
+**Event:** PreToolUse, matcher `Read`. Wired with `"onFailure": "block"`.
+
+Asks you before Claude reads a file whose path is on the sensitive path list. It looks only at the path, never at the content, so the post read scan (section 6) still covers content. Why wired: a post read warning cannot take text back out of the conversation, so for files you already know are sensitive the check has to run before the read. The prompt names the matching pattern. `ask` overrides an allow rule (see the table above).
+
+**The list.** Default patterns, with no company or client names: `.env`, `*.pem`, `*.key` and `.ssh/`. Add your own with `ARBITER_SENSITIVE_PATHS`, comma separated. Extra patterns are added to the defaults; the variable cannot remove one.
+
+| Pattern form | Matches | Example |
+|---|---|---|
+| A name or glob with no slash | The file name | `*.pem` matches `certs/server.pem` |
+| Text ending in a slash | Any path holding that folder | `.ssh/` matches `/home/user/.ssh/config`; `exports/` matches `a/exports/b/c.csv` |
+| A glob with a slash | The whole path | `/data/raw/*` matches `/data/raw/a.csv` |
+
+Case is ignored. Both the path as typed and the symlink resolved path are checked, so a file called `notes.txt` that points at a `.pem` file asks, and so does a file inside a `.ssh` folder that is itself a symlink.
+
+**Fails closed.** Bad JSON, a wrongly shaped payload or any exception denies the read with a message. A missing path field allows. Because the setting is `onFailure: block`, a hook that cannot start or times out also blocks. `tests/hooks/check_hook_inventory.py` fails if that setting is removed.
+
+> **Not covered:**
+> - Bash reads such as `cat` or `head` on a listed path.
+> - Grep, which can return file content, and Glob, which returns only path names.
+> - A sensitive file that is not on the list.
+> - PHI inside a file with an ordinary name. The post read scan warns about that after the fact, not before.
+> - A file whose name differs from the list entry. The list is text matching, not file type detection.
+
+## 15. Git hooks
 
 `hooks/git-pre-push` blocks pushes to protected branches (`ARBITER_PROTECTED_BRANCHES`, default `main master`) and can run an optional check. `hooks/pre-commit-secrets` blocks commits whose staged diff contains known token patterns. Neither is in `settings.json`; copy them into a repo's `.git/hooks/` (see `install.sh`). They are exempt from the wiring check in `tests/hooks/check_hook_inventory.py`.
 
