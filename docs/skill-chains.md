@@ -119,6 +119,8 @@ Key gates by skill:
 
 A gate is where your judgment replaces Claude's. Don't skip them.
 
+**Hook enforced gates.** Three of these are also checked by a hook before the skill starts, so skipping them is not possible. `/{prefix}-arch` is blocked until the state file shows `SPEC_APPROVED`. `/{prefix}-dev` is blocked until the design file ends with an approval line. `/{prefix}-qa` is blocked until the state is `DEV_COMPLETE`, the spec and design both have approval lines, and the edge case validation file has a validation line. A block names the missing file and the line it expects. The exact lines are in [Gate lines](gate-lines.md), and the hook is described in the [Hook Reference](hooks.md). Separately, `gh pr create` is blocked until you approve the PR details.
+
 ---
 
 ## When to Stop the Chain

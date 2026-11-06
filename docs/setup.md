@@ -160,7 +160,8 @@ After answering, the installer:
 - Creates `dp-scripts/` (with git if you chose it)
 - Copies skill files into `~/.claude/commands/` with your prefix and name substituted in
 - Writes your identity into `~/.claude/CLAUDE.md`
-- Stores API tokens in the OS credential store (macOS Keychain, Linux Secret Service, or Windows Credential Manager, never in any file)
+- Merges Arbiter's hooks, permissions and env block into `~/.claude/settings.json` with `installer/merge_settings.py`. Your own hooks, permissions and env entries are kept
+- Stores API tokens in the OS credential store (macOS Keychain, Linux Secret Service, or Windows Credential Manager). On Linux without `secret-tool`, tokens go to a private file at `~/.claude/.secrets` instead, so install `libsecret-tools` first if you can
 - Registers MCP servers at user scope with `claude mcp add --scope user` (stored in `~/.claude.json`)
 - Adds `$DP_KNOWLEDGE`, `$DP_MEETINGS`, `$DP_SCRIPTS`, and `$CLAUDE_DOTFILES` to your shell profile
 
@@ -316,19 +317,26 @@ After /dp-support:
   DI-200-support-handoff.md    Root cause, evidence, fix recommendation
 
 After /dp-spec:
-  DI-200-state.md              Status: SPEC_COMPLETE
-  DI-200-spec.md               Requirements, acceptance criteria, success metrics
+  DI-200-state.md              Status: SPEC_APPROVED
+  DI-200-spec.md               Requirements, acceptance criteria, success metrics,
+                               ends with the line: Approved, YYYY-MM-DD
 
 After /dp-arch:
-  DI-200-state.md              Status: DESIGN_APPROVED
-  DI-200-design.md             Options, tradeoffs, approved recommendation
+  DI-200-state.md              Status: DESIGN_COMPLETE
+  DI-200-design.md             Options, tradeoffs, recommendation. You add the
+                               approval line after the explain-back
+
+After /dp-dev (once per work block):
+  DI-200-state.md              Status: IN_DEV, then DEV_COMPLETE after the last block
+                               last_block_applied: B-01, B-02, ...
+  DI-200-edge-case-validation.md  Written after the last block, ends with the line:
+                               Validated, YYYY-MM-DD
 
 After /dp-qa:
-  DI-200-state.md              Status: QA_APPROVED
+  DI-200-state.md              Status: QA_APPROVED (or QA_BLOCKED)
   DI-200-qa-findings.md        Findings routed to dev, arch, or spec
 
 After /close:
-  DI-200-state.md              Status: CLOSED
   DI-200-session-2026-06-14.md Done / Decided / Pending summary
 ```
 
@@ -344,6 +352,9 @@ Any session can pick up any ticket by reading the state file. No recap needed.
 | `${PREFIX}_MEETINGS` | `~/Developer/{base}/{prefix}-knowledge/06-meetings-summaries` | install.sh |
 | `${PREFIX}_SCRIPTS` | `~/Developer/{base}/{prefix}-scripts` | install.sh |
 | `$CLAUDE_DOTFILES` | `~/Developer/{base}/{prefix}-dotfiles` | install.sh |
+| `$ARBITER_KNOWLEDGE` | Same vault path as `${PREFIX}_KNOWLEDGE`. Hooks and the search pipeline use this fixed name. | install.sh, and the `env` block of `~/.claude/settings.json` |
+| `$ARBITER_CODE_DIR` | The read only code folder the write guards protect. Empty if you did not set one. | install.sh, and the `env` block of `~/.claude/settings.json` |
+| `$ARBITER_SKILL_PREFIX` | Your skill prefix. The gate hook needs it to recognise `/{prefix}-arch`, `-dev` and `-qa`. | `installer/merge_settings.py`, in the `env` block of `~/.claude/settings.json` |
 
 `PREFIX` is your skill prefix in uppercase. Prefix `dp` gives `$DP_KNOWLEDGE`, `$DP_MEETINGS`, `$DP_SCRIPTS`. Prefix `ab` gives `$AB_KNOWLEDGE`, `$AB_MEETINGS`, `$AB_SCRIPTS`.
 

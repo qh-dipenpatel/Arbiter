@@ -50,12 +50,12 @@ dp-knowledge/                         your Obsidian vault ($DP_KNOWLEDGE)
 
 ---
 
-## 1. The Repo: claude-dotfiles/
+## 1. The Repo: {prefix}-dotfiles/
 
-> What is here before and after install. This is the file you cloned and version-control.
+> What is here before and after install. This is the folder you cloned and version-control.
 
 ```
-claude-dotfiles/
+{prefix}-dotfiles/
 │
 ├── install.sh                    ← run this once after cloning (and again to update)
 │
@@ -74,11 +74,11 @@ claude-dotfiles/
 │   └── skill-standard.md         ← structural rules every skill file must follow
 │                                    read this before writing a new skill
 │
-├── settings.json                 ← Claude Code tool permissions template
-│                                    copied to ~/.claude/settings.json at install
-│                                    with {PREFIX_UPPER}_ env var names substituted for your prefix
-│
-│                                    never commit this file — it is in .gitignore
+├── settings.json                 ← hook wiring and tool permissions template
+│                                    merged into ~/.claude/settings.json at install by
+│                                    installer/merge_settings.py: your own hooks, permissions
+│                                    and env are kept, only Arbiter's hook entries are replaced
+│                                    settings.local.json (machine specific) is in .gitignore
 │
 ├── commands/                     ← skill templates (generic names, no prefix)
 │   │                                install.sh copies these to ~/.claude/commands/
@@ -103,6 +103,8 @@ claude-dotfiles/
 │   ├── setup-client.md           ← /setup-client new client onboarding
 │   ├── pull-notes.md             ← /pull-notes   meeting transcript into vault
 │   ├── explore.md                ← /explore      learn a new system area or pipeline
+│   ├── handoff.md                ← /handoff      write the next chain skill's starter prompt
+│   │                                             into the ticket state file
 │   └── lens.md                   ← /lens         shift perspective mid-session
 │
 ├── lenses/                       ← perspective files used by /lens
@@ -119,38 +121,42 @@ claude-dotfiles/
 │   └── MEMORY.md                 ← index of all memory files
 │                                    symlinked into ~/.claude/projects/.../memory/
 │
-├── hooks/                        ← Claude Code hooks (wired in ~/.claude/settings.json)
-│   │                                Each file header carries five fields:
-│   │                                Trigger / Scope / Action / On result / If filter
+├── hooks/                        ← Claude Code hooks (wired in settings.json)
+│   │                                Each file header carries Trigger / Scope / Action.
+│   │                                Full reference: docs/hooks.md
 │   │
-│   ├── pre-submit-vault-inject.sh     ← UserPromptSubmit: queries vault RAG index and injects
-│   │                                    matching context into every prompt before Claude reads it
-│   │                                    Path-portable: derives REPO_DIR from BASH_SOURCE[0]
+│   ├── pre-submit-vault-inject.sh          ← UserPromptSubmit: injects vault search results into
+│   │                                         every prompt, withholds excerpts that hold PHI
+│   ├── pre-prompt-expansion-check-gates.py ← UserPromptExpansion: blocks the arch, dev and qa
+│   │                                         skills until the earlier approval lines exist
+│   ├── pre-tool-write-scan-phi.py          ← PreToolUse Write, Edit, MultiEdit, NotebookEdit:
+│   │                                         scans content for PHI by level (deny, ask, warn)
+│   ├── pre-tool-write-guard-path.sh        ← blocks writes to the read-only code directory
+│   │                                         ($ARBITER_CODE_DIR)
+│   ├── pre-tool-write-require-read.py      ← blocks a write to a guarded state file that was
+│   │                                         not read earlier in the session
+│   ├── pre-tool-bash-scan-phi.py           ← PreToolUse Bash: scans the command text and the
+│   │                                         script files it names for PHI
+│   ├── pre-tool-bash-databricks-ask.py     ← asks before Databricks commands that return rows,
+│   │                                         with a summary of the data requested
+│   ├── pre-tool-bash-guard-code-dir.py     ← Bash side of the code directory guard
+│   ├── pre-tool-bash-gate-pr-create.py     ← blocks `gh pr create` until you approve the PR details
+│   ├── pre-tool-read-ask-sensitive-path.py ← asks before reading a file on the sensitive path list
+│   ├── post-tool-bash-scan-secrets.py      ← PostToolUse: warns when tool output holds credentials
+│   │                                         (advisory, it cannot remove the output)
+│   ├── post-tool-result-scan-phi.py        ← PostToolUse: warns when any tool result holds PHI
+│   │                                         (advisory)
+│   ├── post-tool-read-record.py            ← PostToolUse Read: records reads of guarded files
+│   ├── pre-compact-checkpoint-warn.sh      ← PreCompact: checkpoint reminder before context
+│   │                                         compression
+│   ├── pre-commit-secrets                  ← git pre-commit hook (not a Claude Code hook)
+│   │                                         blocks credential commits in any git repo
+│   │                                         install: cp hooks/pre-commit-secrets <repo>/.git/hooks/pre-commit
+│   ├── git-pre-push                        ← git pre-push hook (not a Claude Code hook)
+│   │                                         blocks direct pushes to protected branches
 │   │
-│   ├── post-tool-bash-scan-secrets.py ← PostToolUse(Bash): scans command output for credentials
-│   │                                    before Claude reads it; warns via additionalContext if found
-│   │                                    (advisory — PostToolUse cannot suppress results)
-│   │                                    14 patterns: Anthropic, AWS, Jira, Databricks, GitHub,
-│   │                                    Slack, OpenAI, Azure, PEM, auth headers, export secrets
-│   │                                    Skips Write/Edit/MultiEdit tool output (TOOL_DENYLIST)
-│   │
-│   ├── pre-tool-write-scan-phi.py     ← PreToolUse(Write|Edit|MultiEdit): scans file content
-│   │                                    for PHI patterns before any write reaches disk
-│   │                                    6 patterns: MRN, SSN, DOB, patient ID, NPI, insurance ID
-│   │                                    Blocks with named pattern list if PHI detected
-│   │
-│   ├── pre-tool-write-guard-path.sh   ← PreToolUse(Write|Edit|MultiEdit): blocks writes to
-│   │                                    the read-only code directory ($ARBITER_CODE_DIR)
-│   │                                    Bails silently if env var is unset
-│   │
-│   ├── pre-compact-checkpoint-warn.sh ← PreCompact: prints checkpoint reminder before Claude
-│   │                                    Code compresses the context window
-│   │
-│   └── pre-commit-secrets             ← git pre-commit hook (not a Claude Code hook)
-│                                        Blocks credential commits in any git repo
-│                                        10 patterns: Jira, Slack, Anthropic, OpenAI, Databricks PAT,
-│                                        GitHub (fine-grained + classic), Azure storage, PEM headers
-│                                        install: cp hooks/pre-commit-secrets <repo>/.git/hooks/pre-commit
+│   └── helpers, not hooks: gate_rules.py, phi_patterns.py, read_guard_common.py,
+│                           sql_summary.py, state_file_io.py
 │
 ├── rag/                          ← vault search pipeline
 │   ├── build_index.py            ← indexes vault into ChromaDB (all-MiniLM-L6-v2, 150-word chunks)
@@ -161,15 +167,37 @@ claude-dotfiles/
 │   ├── 00-policy.mdc
 │   └── 01-context.mdc
 │
+├── installer/
+│   └── merge_settings.py         ← merges Arbiter's hooks, permissions and env into
+│                                    ~/.claude/settings.json without touching your own entries
+│
+├── templates/
+│   └── code-docs/                ← templates for the per file docs under docs/
+│
+├── tests/
+│   ├── hooks/                    ← hook and gate unit tests, hook inventory check
+│   ├── installer/                ← installer tests
+│   ├── e2e/                      ← end to end stream check
+│   └── rag_eval/                 ← retrieval evaluation: golden questions for vault search
+│
+├── .github/workflows/
+│   └── tests.yml                 ← runs the hook, inventory and installer tests on every push
+│
 └── docs/
     ├── prerequisites.md          ← apps to install and tokens to collect
     ├── setup.md                  ← step-by-step from clone to first session
+    ├── connections.md            ← how each service connects and known issues
     ├── overview.md               ← what the system is and why it works this way
     ├── skill-chains.md           ← ticket types, chains, gates, when to stop
+    ├── gate-lines.md             ← the exact state and approval lines the gates check
     ├── walkthrough.md            ← complete bug ticket with fake data
     ├── system-design.md          ← architecture, departments model, how to adopt
+    ├── hooks.md                  ← every hook: what it does, when it fires, testing, recovery
     ├── structure.md              ← this file
-    └── future.md                 ← planned improvements and team-level roadmap
+    ├── future.md                 ← planned improvements and team-level roadmap
+    ├── install.md, settings.md   ← per file docs for install.sh and settings.json
+    ├── hooks/, installer/, tests/ ← per file docs that mirror the code folders
+    └── arbiter-guide.html        ← single page HTML guide to Arbiter
 ```
 
 ---
@@ -188,10 +216,12 @@ claude-dotfiles/
 │                                    generated by install.sh, never committed anywhere
 │                                    sourced by your shell profile and MCP server commands
 │
-├── settings.json                 ← copied from repo template with env vars substituted
-│                                    (prefix substituted at install, e.g. {PREFIX_UPPER}_ → DP_)
-│
-│                                    never commit this file
+├── settings.json                 ← merged from the repo template by installer/merge_settings.py
+│                                    Arbiter's hook entries are replaced, your own hooks,
+│                                    permissions and env are kept. It also writes an env block:
+│                                    ARBITER_KNOWLEDGE, ARBITER_CODE_DIR, CLAUDE_DOTFILES and
+│                                    ARBITER_SKILL_PREFIX
+│                                    machine specific, never commit this file
 │
 ├── commands/                     ← your installed skills (copied + substituted at install)
 │   ├── {prefix}-ticket.md        ← e.g. ab-ticket.md if your prefix is "ab"
@@ -212,11 +242,12 @@ claude-dotfiles/
 │   ├── setup-client.md
 │   ├── pull-notes.md
 │   ├── explore.md
+│   ├── handoff.md
 │   └── lens.md
 │
 └── projects/
     └── -Users-{you}-{working-dir}/
-        └── memory/               ← symlink → claude-dotfiles/memory/
+        └── memory/               ← symlink → {prefix}-dotfiles/memory/
                                      feedback memories, committed back to the repo
 ```
 
@@ -226,7 +257,7 @@ claude-dotfiles/
 |---|---|
 | `CLAUDE.md` | Copied from repo template, identity substituted with sed |
 | `credentials.sh` | Generated fresh, reads Keychain at runtime |
-| `settings.json` | Copied from repo template with env vars substituted |
+| `settings.json` | Merged from the repo template by `installer/merge_settings.py`, placeholders such as `$CLAUDE_DOTFILES` replaced with real paths |
 | `commands/{prefix}-*.md` | Copied from `commands/*.md`, prefix and `{NAME}` substituted |
 | `commands/start.md` etc. | Copied from repo, `{NAME}` substituted |
 | `memory/` | Symlinked from repo |

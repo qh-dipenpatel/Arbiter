@@ -10,7 +10,7 @@ This document captures planned improvements and the direction the system is head
 
 **Goal:** All team members run the same skill versions, shared patterns propagate automatically, and a common knowledge base replaces per-person silos.
 
-**Why it is not built yet:** Adoption comes first. The team-level system has no value until individuals are actually running the chain on real tickets. Once Andrew and Akhil have worked two or three tickets each, the patterns worth sharing will be obvious. Building the architecture before that signal exists risks designing for the wrong problems.
+**Why it is not built yet:** Adoption comes first. The team-level system has no value until individuals are actually running the chain on real tickets. Once each team member has worked two or three tickets, the patterns worth sharing will be obvious. Building the architecture before that signal exists risks designing for the wrong problems.
 
 **When to build it:** After two to four weeks of individual adoption, when repeated corrections and patterns emerge across users.
 
@@ -93,7 +93,7 @@ The core goal. Every team member runs the same `/ticket`, `/spec`, `/arch`, `/de
 
 ---
 
-## Priority 5: Skill Discovery for New Users
+## Priority 4: Skill Discovery for New Users
 
 **Current state:** New users run `/start` and are told to invoke `/{prefix}-ticket [ID]`. They do not know which other skills exist or when to use them until they read the docs.
 

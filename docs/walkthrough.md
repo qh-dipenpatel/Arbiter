@@ -482,7 +482,7 @@ Pending
   - Lakewood to resubmit 22 corrected records
   - DI-201 to be created for full batch quarantine alert
 
-State file updated: DI-200-state.md — Status: QA APPROVED
+State file updated: DI-200-state.md, Status: QA_APPROVED
 
 Memory candidate:
   [feedback] quarantine_ind is the standard column name for null-excluded records
