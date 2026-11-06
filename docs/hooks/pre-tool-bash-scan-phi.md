@@ -1,72 +1,70 @@
 ---
 doc_type: module
-catalog_type: code_doc   # ticket | reference | knowledge | session | code_doc
-doc_role: module         # module | config | test | notebook | sql | pipeline | script | terraform | shell | dockerfile | index
-indexable: true          # false for conversation and trajectory doc_types
-indexed: null            # machine-stamped by indexer; never fill manually
+catalog_type: code_doc
+doc_role: module
+indexable: true
+indexed: null
 repo: "Arbiter"
-source_file: "hooks/pre-tool-bash-scan-phi.py"    # relative path from repo root, e.g., engine/core/assembler.py
-status: ACTIVE | ARCHIVED
-last_updated: 2026-11-02
-scores: []         # list of: {model, system, score, scored_on}
-                   # model: dedup key. Same model replaces, new model appends.
-                   # system: local_llm | local_eval | frontier
-                   # score: 0.0-1.0, scored_on: YYYY-MM-DD
-language: ""       # e.g., python
-imports: []        # modules this file imports, relative paths
-exports: []        # functions, classes, or constants this file exposes
-tags: []
+source_file: "hooks/pre-tool-bash-scan-phi.py"
+status: ACTIVE
+last_updated: 2026-11-06
+scores: []
+language: "python"
+imports: [hooks/phi_patterns.py, glob, itertools, json, os, re, shlex, stat, sys, typing]
+exports: [main, deny, split_command, split_segments, script_paths, script_in_segment, strip_wrappers, script_arg, resolve_raw_path, iter_file_blocks, scan_script]
+tags: [phi, hooks, bash, pre-tool]
 links: []
-# classifier:        # machine-authored by post-write hooks; never fill manually
-#   stakes: ""       # high | medium | low | none
-#   verified_at: ""  # YYYY-MM-DD
-#   staleness_score: 0.0
-#   integrity_pass: true
-#   voice_pass: true
 update_needed: 2026-11-02
 ---
 
 ## Purpose
 
-[One paragraph. What this module does and why it exists. No behavior claims without {src:} tags.]
+A PreToolUse hook for Bash. It scans the command text, and the script files the command names, with the shared PHI rules, and decides deny, ask or warn from the strongest finding. {src:hooks/pre-tool-bash-scan-phi.py:main} It exists so PHI typed into a command, or sitting in a script the command runs, is caught before the command runs. The script files are only read, never run. {src:hooks/pre-tool-bash-scan-phi.py:scan_script}
 
 ## Dependencies
 
-[What this module imports and depends on.
-Vault copy: [[module-name]]. Repo /docs/ copy: [module-name](../path/module-name.md).]
+Imports `LEVEL_RANK`, `pre_tool_decision` and `scan_levels` from [phi_patterns](phi_patterns.md), with the hooks directory added to the path. {src:hooks/pre-tool-bash-scan-phi.py:316} The rest is standard library: `glob`, `itertools`, `json`, `os`, `re`, `shlex`, `stat`, `sys`. {src:hooks/pre-tool-bash-scan-phi.py:47-55}
+
+Input is the PreToolUse JSON on stdin, using `tool_input.command` and `cwd`. {src:hooks/pre-tool-bash-scan-phi.py:318-323} Tests: [test_phi_hook_levels](../tests/hooks/test_phi_hook_levels.md), [test_phi_safety_speed](../tests/hooks/test_phi_safety_speed.md), [test_phi_qa_regressions](../tests/hooks/test_phi_qa_regressions.md).
 
 ## Behavior
 
-[Functional description of the module public interface. Factual claims carry inline citation tags immediately after the claim.
+**Main flow.** An empty command returns with no output. {src:hooks/pre-tool-bash-scan-phi.py:320} Otherwise the command text is scanned as the source `Bash command text`. Each script path found adds a source named `script file` plus the base name. {src:hooks/pre-tool-bash-scan-phi.py:322-326} `pre_tool_decision` turns the sources into output, and the hook prints it only when there is one. {src:hooks/pre-tool-bash-scan-phi.py:327-329}
 
-Tag reference (Decision 6):
-  {src:path/to/file.py:42}                        cited, not yet frontier-verified
-  {src:path/to/file.py:42, verified:model-name}   frontier-confirmed, model-name matches scores[].model
-  {src:git:abc1234}                                behavior confirmed via commit
-  {src:docs:name-or-url}                           external reference (RFC, library doc)
-  {unverified}                                     source not reachable during generation
+**Fails closed.** Any exception in `main` (bad JSON, import error, scan error) prints a deny with an internal error message, and the process still exits 0. {src:hooks/pre-tool-bash-scan-phi.py:340-347}
 
-Requires citation: behavior assertions, data flow, dependency calls, error conditions, return values.
-Does not require: general purpose explanation, structural observation, naming rationale.]
+**Finding script files.** The command is split with `shlex` into segments at operators. Words after a plain `<` redirect are collected as files too. {src:hooks/pre-tool-bash-scan-phi.py:split_command} If one quote is unbalanced, the hook parses line by line, and a line that still fails is split on whitespace. {src:hooks/pre-tool-bash-scan-phi.py:_tokens_with_line_fallback}
+
+For each segment the hook skips leading `VAR=value` words and wrapper commands with their flags (`sudo`, `env`, `timeout`, `nice`, `ionice`, `stdbuf`, `nohup`, `time`, `exec`, `command`, and `uv run`). {src:hooks/pre-tool-bash-scan-phi.py:strip_wrappers} Then:
+
+- For `python`, `bash`, `sh`, `zsh`, `node`, `ruby` or `perl`, the script is the first non option argument. Inline code flags and a lone `-` mean no script. Flags that take a separate value are skipped. {src:hooks/pre-tool-bash-scan-phi.py:script_arg}
+- For `source` or `.`, the script is the next word. {src:hooks/pre-tool-bash-scan-phi.py:script_in_segment}
+- For a command word that holds a slash, that word is the script. After `uv run`, a word ending in `.py` also counts. {src:hooks/pre-tool-bash-scan-phi.py:script_in_segment}
+
+**Path resolution.** `~` and variables set in the hook's own environment are expanded. A word that still holds `$` or a backtick names no file. Relative paths join the working directory. {src:hooks/pre-tool-bash-scan-phi.py:resolve_raw_path} A glob expands to at most 10 matches, kept only if each is a regular file of 1 MB or less. {src:hooks/pre-tool-bash-scan-phi.py:MAX_GLOB_MATCHES} {src:hooks/pre-tool-bash-scan-phi.py:_is_small_regular_file} At most 10 files are scanned per command, without duplicates. {src:hooks/pre-tool-bash-scan-phi.py:script_paths}
+
+**Reading a file.** A file larger than 256 KB is read in blocks of that size, each starting with the last 1024 bytes of the block before. A file with a null byte in its first 8192 bytes is treated as binary and yields nothing. {src:hooks/pre-tool-bash-scan-phi.py:iter_file_blocks} A missing or unreadable file, a file that is not a regular file, or a path the system rejects gives no findings, so these cases never block. {src:hooks/pre-tool-bash-scan-phi.py:scan_script}
+
+**Long commands.** A command longer than 32768 characters is not parsed, so it names no script files. Its text is still scanned in full. {src:hooks/pre-tool-bash-scan-phi.py:script_paths} {src:hooks/pre-tool-bash-scan-phi.py:322}
 
 ## Diagram: module level (L2, required)
 
 ```mermaid
 flowchart TD
-  %% L2 Container. Max 10 nodes. Real module, function, and dependency names.
+  A["Read payload"] --> B["Scan command text"]
+  A --> C["Find script files"]
+  C --> D["Read file blocks"]
+  D --> E["Scan each block"]
+  B --> F["Combine findings"]
+  E --> F
+  F --> G["Allow ask or deny"]
+  A -.->|"any error"| H["Deny command"]
 ```
-
-## Diagram: function level (L3, optional)
-
-<!-- Fire when a function has decision gates, branching, or internal data paths not obvious from the signature. Skip for straight-line functions. Max 12 nodes. flowchart TD. -->
 
 ## Notes
 
-The script file scan finds files after interpreter options that take a value (`-W`, `-X`, `-o`), behind wrappers with flags (`sudo`, `env`, `timeout`, `nice`, `uv run`), for `ruby` and `perl`, after `< file` redirects, and through globs. A glob reads at most 10 regular files, each up to 1 MB, under the working directory, in sorted order. Variables set in the hook's own environment and `~` are expanded.
+Known limits, as stated in the source header. PHI a script builds, fetches or writes at run time is not in the command or the file. Split or encoded strings dodge the patterns. Scripts reached through a variable set inside the command, `cd`, `-m module`, `xargs`, pipes or command substitution are not found. A glob past the caps is only partly read. The file can change after the scan. {src:hooks/pre-tool-bash-scan-phi.py:35-39}
 
-What the scan still misses:
-- A variable set inside the same command (`D=/x; python3 $D/a.py`). A path with an unresolved variable is skipped, not guessed.
-- Scripts reached through `cd`, `-m module`, `xargs`, pipes, command substitution, or a wrapper not in the list.
-- Globs past the caps: the 11th matching file, files over 1 MB, recursive `**`.
-- Options with a value attached in an unlisted form, and wrapper flags not in the table.
-- PHI a script builds, fetches or writes at run time, and files that change after the scan.
+A broken hook blocks every Bash command, so fix it in an editor outside Claude Code. {src:hooks/pre-tool-bash-scan-phi.py:41-42}
+
+The post tool hook that scans what a command prints is a separate file. {src:hooks/pre-tool-bash-scan-phi.py:40}
