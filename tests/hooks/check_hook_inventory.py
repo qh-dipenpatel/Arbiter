@@ -5,6 +5,7 @@ Date: 2026-11-01
 Scope: fail when hooks/, settings.json and docs/hooks.md disagree about which hooks exist
 Ticket: none (Arbiter is not Jira tracked)
 ChangeLog:
+  2026-11-06  Check 4 also covers the sensitive path read hook.
   2026-11-04  Added check 4: PHI scan hooks must set onFailure block.
   2026-11-01  Created.
 
@@ -12,7 +13,7 @@ Checks:
   1. every hook file in hooks/ is wired in settings.json (unless allowlisted as a helper)
   2. every hook file in hooks/ is mentioned in docs/hooks.md
   3. every hook file settings.json points at exists
-  4. the PHI scan hooks in settings.json set "onFailure": "block"
+  4. the PHI scan hooks and the sensitive path read hook in settings.json set "onFailure": "block"
 
 Run: python3 tests/hooks/check_hook_inventory.py   (exit 0 = consistent, 1 = drift)
 """
@@ -40,6 +41,7 @@ HELPERS = frozenset({
 PHI_BLOCKING_HOOKS = frozenset({
     "pre-tool-write-scan-phi.py",
     "pre-tool-bash-scan-phi.py",
+    "pre-tool-read-ask-sensitive-path.py",
 })
 HOOK_REF_RE = re.compile(r"hooks/([A-Za-z0-9_.-]+)")
 

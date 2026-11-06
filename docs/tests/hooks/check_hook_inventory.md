@@ -1,65 +1,49 @@
 ---
 doc_type: module
-catalog_type: code_doc   # ticket | reference | knowledge | session | code_doc
-doc_role: module         # module | config | test | notebook | sql | pipeline | script | terraform | shell | dockerfile | index
-indexable: true          # false for conversation and trajectory doc_types
-indexed: null            # machine-stamped by indexer; never fill manually
+catalog_type: code_doc
+doc_role: module
+indexable: true
+indexed: null
 repo: "Arbiter"
-source_file: "tests/hooks/check_hook_inventory.py"    # relative path from repo root, e.g., engine/core/assembler.py
-status: ACTIVE | ARCHIVED
-last_updated: 2026-11-01
-scores: []         # list of: {model, system, score, scored_on}
-                   # model: dedup key. Same model replaces, new model appends.
-                   # system: local_llm | local_eval | frontier
-                   # score: 0.0-1.0, scored_on: YYYY-MM-DD
-language: ""       # e.g., python
-imports: []        # modules this file imports, relative paths
-exports: []        # functions, classes, or constants this file exposes
-tags: []
+source_file: "tests/hooks/check_hook_inventory.py"
+status: ACTIVE
+last_updated: 2026-11-06
+scores: []
+language: "python"
+imports: ["json", "re", "sys", "pathlib"]
+exports: ["wired_names", "phi_hooks_not_blocking", "hook_files", "find_problems", "main"]
+tags: [hooks, inventory, drift-check]
 links: []
-# classifier:        # machine-authored by post-write hooks; never fill manually
-#   stakes: ""       # high | medium | low | none
-#   verified_at: ""  # YYYY-MM-DD
-#   staleness_score: 0.0
-#   integrity_pass: true
-#   voice_pass: true
-update_needed: 2026-11-04
+update_needed: 2026-11-06
 ---
 
 ## Purpose
 
-[One paragraph. What this module does and why it exists. No behavior claims without {src:} tags.]
+A drift check, not a unit test. It fails when the files in `hooks/`, the hook entries in `settings.json` and the list in `docs/hooks.md` disagree about which hooks exist. {src:tests/hooks/check_hook_inventory.py:5} It also checks that three hooks (two PHI scan hooks and the sensitive path read hook) set `onFailure` to `block`. {src:tests/hooks/check_hook_inventory.py:16}
 
 ## Dependencies
 
-[What this module imports and depends on.
-Vault copy: [[module-name]]. Repo /docs/ copy: [module-name](../path/module-name.md).]
+Uses only the standard library: `json`, `re`, `sys` and `pathlib`. {src:tests/hooks/check_hook_inventory.py:23-26} It reads three things from the repo: the `hooks/` folder, `settings.json` and `docs/hooks.md`. {src:tests/hooks/check_hook_inventory.py:29-31} It is called by the hook test runner, see [run](run.md). {src:tests/hooks/run.sh:183}
 
 ## Behavior
 
-[Functional description of the module public interface. Factual claims carry inline citation tags immediately after the claim.
+Run it with `python3 tests/hooks/check_hook_inventory.py`. Exit 0 means consistent, exit 1 means drift. {src:tests/hooks/check_hook_inventory.py:18} Each problem prints one line starting with `FAIL`. A clean run prints one `PASS` line. {src:tests/hooks/check_hook_inventory.py:102-106}
 
-Tag reference (Decision 6):
-  {src:path/to/file.py:42}                        cited, not yet frontier-verified
-  {src:path/to/file.py:42, verified:model-name}   frontier-confirmed, model-name matches scores[].model
-  {src:git:abc1234}                                behavior confirmed via commit
-  {src:docs:name-or-url}                           external reference (RFC, library doc)
-  {unverified}                                     source not reachable during generation
+The four checks:
 
-Requires citation: behavior assertions, data flow, dependency calls, error conditions, return values.
-Does not require: general purpose explanation, structural observation, naming rationale.]
+1. Every hook file in `hooks/` must be wired in `settings.json`, unless it is on the helper allowlist. {src:tests/hooks/check_hook_inventory.py:91-93} The allowlist holds the shared helper modules and the two git hook scripts. {src:tests/hooks/check_hook_inventory.py:32-40}
+2. Every file in `hooks/` must be named somewhere in `docs/hooks.md`. This applies to helpers too. {src:tests/hooks/check_hook_inventory.py:94-96}
+3. Every hook file that `settings.json` points at must exist in `hooks/`. {src:tests/hooks/check_hook_inventory.py:89}
+4. The three blocking hooks must each appear in `settings.json` with `onFailure` set to `block`. A missing entry or a different value is a failure. {src:tests/hooks/check_hook_inventory.py:61-75}
 
-## Diagram: module level (L2, required)
+How hooks are found: the script scans every hook command string in `settings.json` for a `hooks/<name>` reference. {src:tests/hooks/check_hook_inventory.py:46} {src:tests/hooks/check_hook_inventory.py:49-58} Hidden files and folders are ignored when listing `hooks/`. {src:tests/hooks/check_hook_inventory.py:78-80}
 
-```mermaid
-flowchart TD
-  %% L2 Container. Max 10 nodes. Real module, function, and dependency names.
-```
+What a failure means: a hook was added, removed or renamed in one place and not the others. Or a blocking hook lost its fail closed setting, so a crash in it would let the action through. Fix the place that drifted, then rerun.
 
-## Diagram: function level (L3, optional)
+## Diagram
 
-<!-- Fire when a function has decision gates, branching, or internal data paths not obvious from the signature. Skip for straight-line functions. Max 12 nodes. flowchart TD. -->
+<!-- The flow is a plain list of four independent checks, no diagram needed. -->
 
 ## Notes
 
-[Edge cases, known limitations, maintenance notes.]
+Check 2 matches by plain substring, so a file name that appears inside a longer name in the doc would count as mentioned. {src:tests/hooks/check_hook_inventory.py:95} The helper allowlist and the blocking hook list are hard coded, so a new helper or a new blocking hook needs an edit here. {src:tests/hooks/check_hook_inventory.py:32-45}

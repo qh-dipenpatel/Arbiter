@@ -87,6 +87,16 @@
             "command": "\"$CLAUDE_DOTFILES/hooks/pre-tool-write-require-read.py\""
           }
         ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_DOTFILES/hooks/pre-tool-read-ask-sensitive-path.py\"",
+            "onFailure": "block"
+          }
+        ]
       }
     ],
     "PostToolUse": [

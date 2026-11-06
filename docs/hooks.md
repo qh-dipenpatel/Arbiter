@@ -2,7 +2,7 @@
 
 Created by Dipen Patel.
 
-Claude Code hooks are shell or Python scripts that fire at defined points in the agent loop. Arbiter wires twelve hooks across four events in `settings.json`, plus four shared modules (`hooks/state_file_io.py` for atomic, locked writes to state files, `hooks/phi_patterns.py` for PHI detection and payload text extraction, `hooks/sql_summary.py` for the Databricks approval summary, `hooks/read_guard_common.py` for the read before write guard) and two git hooks that are not Claude Code hooks (`hooks/git-pre-push`, `hooks/pre-commit-secrets`; see section 13). `python3 tests/hooks/check_hook_inventory.py` fails if a hook file, `settings.json` and this page disagree. Each section below shows what the hook does and when it fires.
+Claude Code hooks are shell or Python scripts that fire at defined points in the agent loop. Arbiter wires fourteen hooks across five events in `settings.json` (UserPromptSubmit, UserPromptExpansion, PreToolUse, PostToolUse and PreCompact), plus five shared modules (`hooks/state_file_io.py` for atomic, locked writes to state files, `hooks/phi_patterns.py` for PHI detection and payload text extraction, `hooks/sql_summary.py` for the Databricks approval summary, `hooks/read_guard_common.py` for the read before write guard, `hooks/gate_rules.py` for the chain skill gate checks) and two git hooks that are not Claude Code hooks (`hooks/git-pre-push`, `hooks/pre-commit-secrets`; see section 13). `python3 tests/hooks/check_hook_inventory.py` fails if a hook file, `settings.json` and this page disagree. Each section below shows what the hook does and when it fires.
 
 Hooks are defined in the repo `settings.json` and merged into `~/.claude/settings.json` with absolute paths by `installer/merge_settings.py`. The merge keeps your own hooks, permissions, env, and other settings, and replaces only Arbiter's hook entries (including stale paths from a moved repo). It also writes an `env` block (`ARBITER_KNOWLEDGE`, `ARBITER_CODE_DIR`, `CLAUDE_DOTFILES`) so hooks work in editors launched without your shell profile.
 
@@ -38,8 +38,9 @@ Controls that must prevent exposure belong in PreToolUse. PostToolUse is a secon
 - `pre-tool-bash-gate-pr-create.py` fails open on internal errors, except that a command it cannot parse falls back to a text match.
 - `pre-prompt-expansion-check-gates.py` **fails open** (design decision). Bad JSON, an import error of `gate_rules.py`, a rule error or any other exception is logged as `fail_open` and the command goes ahead. A broken gate check must not lock you out of the chain skills; the cost is that a bug lets a skill start without its approval lines, so read the log (below) now and then.
 - `pre-tool-write-require-read.py` and `post-tool-read-record.py` fail open: a logging or parsing problem never blocks work.
+- `pre-tool-read-ask-sensitive-path.py` **fails closed**. Bad input or any exception denies the read, and its `settings.json` entry sets `onFailure: block`.
 
-**What fail closed covers.** The two PHI pre hooks deny when they catch an error themselves: bad or wrongly shaped input, a missing or broken `phi_patterns.py`, or any exception inside the scan. Claude Code treats a hook that cannot start, exits with a code other than 0 or 2, prints invalid output, or is cancelled by its timeout as a non blocking error, and the action goes ahead (source: Claude Code hooks documentation, checked 2026-11-02). So a hook file with a syntax error, or a missing `python3`, does not block. Timeouts: the documented default for a command hook is 600 seconds, and `settings.json` sets none on these hooks. Measured scan times are in "PHI scan speed limits" below.
+**What fail closed covers.** The two PHI pre hooks deny when they catch an error themselves: bad or wrongly shaped input, a missing or broken `phi_patterns.py`, or any exception inside the scan. Claude Code treats a hook that cannot start, exits with a code other than 0 or 2, prints invalid output, or is cancelled by its timeout as a non blocking error, and the action goes ahead (source: Claude Code hooks documentation, checked 2026-11-02). So a hook file with a syntax error, or a missing `python3`, does not block. Timeouts: the documented default for a command hook is 600 seconds, and `settings.json` sets none on the PHI hooks. Only two hooks set one: the vault inject hook (30 seconds) and the gate check hook (10 seconds). Measured scan times are in "PHI scan speed limits" below.
 
 ---
 
@@ -68,11 +69,13 @@ flowchart TD
   P["pre-tool-write-require-read.py"]
   Q["post-tool-read-record.py"]
   R["pre-prompt-expansion-check-gates.py"]
+  S["pre-tool-read-ask-sensitive-path.py"]
 
   A --> B --> C --> D
   A -- "typed slash command" --> R --> C
   D -- "Write / Edit / MultiEdit" --> E --> F --> P --> G
   D -- "Bash" --> M --> N --> O --> G
+  D -- "Read" --> S --> G
   G -- "Read" --> Q --> J
   D -- "All other tools" --> G
   G -- "Bash output" --> H --> J
@@ -81,7 +84,7 @@ flowchart TD
   C --> K --> L
 
   class A actor
-  class B,E,F,H,I,L,M,N,O,P,Q,R core
+  class B,E,F,H,I,L,M,N,O,P,Q,R,S core
 ```
 
 ---
@@ -191,7 +194,7 @@ flowchart TD
 
 ## 4. pre-tool-write-guard-path.sh
 
-**Event:** PreToolUse — fires before Write, Edit, and MultiEdit.
+**Event:** PreToolUse: fires before Write, Edit, and MultiEdit. The path comes from `file_path`, or from `notebook_path` when `file_path` is empty.
 
 Blocks writes to the read-only code directory (`ARBITER_CODE_DIR`). That directory is a RAG source mirror of production repos and must never be written to. If `ARBITER_CODE_DIR` is not set the hook does not block, but it prints a visible warning (a `systemMessage` plus the same text on stderr) so an unprotected setup is not silent. Bash writes into the same directory are covered by section 12.
 
@@ -205,7 +208,7 @@ flowchart TD
   A["Write / Edit / MultiEdit call"]
   B["Hook fires"]
   C{"ARBITER_CODE_DIR set?"}
-  D["Bail silently"]
+  D["Warn and allow"]
   E["Normalize target path"]
   F{"Path inside code directory?"}
   G["Block: read-only source protected"]
@@ -336,7 +339,7 @@ The write and Bash hooks scan before the action runs. The result hook scans afte
 
 | Level | Pre hook outcome | Rules at this level (verified in `phi_patterns.py`) |
 |---|---|---|
-| deny | `permissionDecision: deny` | The labeled identifier rules above, a date next to a birth word (also with month names, "born on" and "birthday"), a full street address (number, street words, street suffix, city, two letter state, ZIP), a capitalized name right after a patient, member or pt label (`NAME`), PHI column names that come with data (`COLUMN`, the column name itself is never shown). A label missing from the level map also defaults to deny. |
+| deny | `permissionDecision: deny` | The labeled identifier rules above, a date next to a birth word (also with month names, "born on" and "birthday"), a full street address (number, street words, street suffix, city, two letter state, ZIP), a capitalized name right after a patient, member or pt label (`NAME`; if the value holds a generic word such as form, team, portal or system it gives ask instead, because it is probably not a person), PHI column names that come with data (`COLUMN`, the column name itself is never shown). A label missing from the level map also defaults to deny. |
 | ask | `permissionDecision: ask` | A phone number next to a phone label (`PHONE`). Two clues of different kinds within 200 characters (`CONTEXT`). |
 | warn | No permission decision. A `systemMessage` and `additionalContext` are added and the normal permission flow runs. | A lone titled name (`Mr`, `Mrs`, `Ms`, `Mx` plus two capitalized words), a lone age with a sex word or `y/o`, or a lone date next to an admission, discharge, visit, surgery or procedure word (`CONTEXT_CLUE`). A phone number with separators and no label (`PHONE_UNLABELED`). |
 
@@ -360,7 +363,21 @@ What to do instead:
 ```
 
 **2. Text with no clear clue.**
-Names, addresses, dates and clinical notes are caught only in the shapes listed under "PHI detection levels and rules". A name with no patient label or title next to it, an address missing its city, state or ZIP, a date with no birth or care word nearby, and a clinical note with no personal clue all pass. A lone weak clue gives a warn at most. The README has the full list of what is not caught.
+Names, addresses, dates and clinical notes are caught only in the shapes listed under "PHI detection levels and rules". A name with no patient label or title next to it, an address missing its city, state or ZIP, a date with no birth or care word nearby, and a clinical note with no personal clue all pass. A lone weak clue gives a warn at most. The full list of what the PHI hooks do not catch:
+
+1. Names with no clue nearby. Only a name after a patient style label, or after a title, is looked at.
+2. Addresses that lack a street, city, state and ZIP together. A street part alone is not flagged.
+3. Phone numbers outside US style formats, and bare digit runs with no separators.
+4. Dates with no birth word and no care event word nearby.
+5. Clinical narrative with no personal clue. Rare conditions can still point to one person.
+6. Split, encoded or generated text. A script that builds or fetches data at run time is never seen before it runs, and a script reached through a variable, `cd`, `-m`, `xargs` or a pipe is not found. A command longer than 32,768 characters is scanned as text only, so the script files it names are not read.
+7. Files a script writes. They are seen only when Claude reads them, and by then the data is already in Claude's context.
+8. Images, PDFs, other binary files and archives.
+9. File names, paths, URLs and branch names. The Write hook reads content, not the target path.
+10. Anything typed in the chat prompt. No hook scans it.
+11. Non US and non English formats.
+12. Other HIPAA identifiers: email values, IP addresses, vehicle and device IDs, account numbers, license numbers. Only email column names are flagged.
+13. Results the post hook flags are already in Claude's context. It warns and cannot take them back.
 
 **3. PHI already in the conversation from an earlier turn.**
 If PHI entered Claude's context before a hook was active — for example, from a prompt you typed before the hook was installed — it remains in the conversation history that Anthropic receives on every subsequent turn. Hooks only gate new data as it enters; they do not scrub existing context.
@@ -420,7 +437,7 @@ flowchart TD
 
 Scans the command text, and the script files the command names, with `scan_levels`. Deny blocks the command, ask makes Claude Code prompt you, warn adds a visible message and lets the normal permission flow run. The message lists sources and rule labels only, for example `Bash command text` or `script file run.py`, never the matched text.
 
-**Script file scan.** The command is split with `shlex`. For `python`, `python3`, `bash`, `sh`, `zsh`, `node`, `source` or `.`, and a command that starts with a path, the named file is read and scanned with the same rules. Wrappers (`sudo`, `env`, `nohup`, `time`, `exec`, `command`) and leading `VAR=value` words are skipped. At most 10 files per command. The file is only read, never run. A file larger than 256 KB is read in 256 KB blocks that overlap by 1 KB, so a value on a block edge is still found. The scan is best effort and degrades to the command text alone, never blocking, when the file is missing, unreadable, a directory or pipe, binary (a null byte in the first 8 KB), a path the system rejects, or the command cannot be parsed. Inline code (`-c`, `-m`, `-e`, `-p`) and a script read from stdin name no file. A command longer than 32,768 characters is not parsed, so its script files are not read, but its text is still scanned in full.
+**Script file scan.** The command is split with `shlex`. For `python`, `python3`, `bash`, `sh`, `zsh`, `node`, `ruby`, `perl`, `source` or `.`, and a command that starts with a path, the named file is read and scanned with the same rules. Wrappers (`sudo`, `env`, `timeout`, `nice`, `ionice`, `stdbuf`, `nohup`, `time`, `exec`, `command`, and `uv run`) and leading `VAR=value` words are skipped. At most 10 files per command. The file is only read, never run. A file larger than 256 KB is read in 256 KB blocks that overlap by 1 KB, so a value on a block edge is still found. The scan is best effort and degrades to the command text alone, never blocking, when the file is missing, unreadable, a directory or pipe, binary (a null byte in the first 8 KB), a path the system rejects, or the command cannot be parsed. Inline code (`-c`, `-m`, `-e`, `-p`) and a script read from stdin name no file. A command longer than 32,768 characters is not parsed, so its script files are not read, but its text is still scanned in full.
 
 **Fails closed.** If the hook cannot run (bad payload, a payload of the wrong shape, missing `phi_patterns.py`, any exception in the core scan) it denies the command and says why. Decision by the owner on 2026-11-01: an unscanned command is treated as unsafe. Cost: a broken hook blocks all Bash, so fixes happen in an editor outside Claude Code (see Recovery). This covers errors the hook catches; see "What fail closed covers" above for the cases Claude Code treats as non blocking.
 
@@ -515,7 +532,32 @@ Blocks the arch, dev and qa chain skills (`<prefix>-arch`, `<prefix>-dev`, `<pre
 - **Log:** `ARBITER_GATE_LOG`, default `~/.arbiter/state/gate_check.log`.
 - **Existing users:** re-run the installer. It adds `ARBITER_SKILL_PREFIX` to the settings `env` block and wires the hook; without the variable the hook allows everything.
 
-## 14. Git hooks
+## 14. pre-tool-read-ask-sensitive-path.py
+
+**Event:** PreToolUse, matcher `Read`. Wired with `"onFailure": "block"`.
+
+Asks you before Claude reads a file whose path is on the sensitive path list. It looks only at the path, never at the content, so the post read scan (section 6) still covers content. Why wired: a post read warning cannot take text back out of the conversation, so for files you already know are sensitive the check has to run before the read. The prompt names the matching pattern. `ask` overrides an allow rule (see the table above).
+
+**The list.** Default patterns, with no company or client names: `.env`, `*.pem`, `*.key` and `.ssh/`. Add your own with `ARBITER_SENSITIVE_PATHS`, comma separated. Extra patterns are added to the defaults; the variable cannot remove one.
+
+| Pattern form | Matches | Example |
+|---|---|---|
+| A name or glob with no slash | The file name | `*.pem` matches `certs/server.pem` |
+| Text ending in a slash | Any path holding that folder | `.ssh/` matches `/home/user/.ssh/config`; `exports/` matches `a/exports/b/c.csv` |
+| A glob with a slash | The whole path | `/data/raw/*` matches `/data/raw/a.csv` |
+
+Case is ignored. Both the path as typed and the symlink resolved path are checked, so a file called `notes.txt` that points at a `.pem` file asks, and so does a file inside a `.ssh` folder that is itself a symlink.
+
+**Fails closed.** Bad JSON, a wrongly shaped payload or any exception denies the read with a message. A missing path field allows. Because the setting is `onFailure: block`, a hook that cannot start or times out also blocks. `tests/hooks/check_hook_inventory.py` fails if that setting is removed.
+
+> **Not covered:**
+> - Bash reads such as `cat` or `head` on a listed path.
+> - Grep, which can return file content, and Glob, which returns only path names.
+> - A sensitive file that is not on the list.
+> - PHI inside a file with an ordinary name. The post read scan warns about that after the fact, not before.
+> - A file whose name differs from the list entry. The list is text matching, not file type detection.
+
+## 15. Git hooks
 
 `hooks/git-pre-push` blocks pushes to protected branches (`ARBITER_PROTECTED_BRANCHES`, default `main master`) and can run an optional check. `hooks/pre-commit-secrets` blocks commits whose staged diff contains known token patterns. Neither is in `settings.json`; copy them into a repo's `.git/hooks/` (see `install.sh`). They are exempt from the wiring check in `tests/hooks/check_hook_inventory.py`.
 

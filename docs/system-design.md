@@ -119,12 +119,18 @@ When PHI comes into scope, the skill stops and flags it. You acknowledge before 
 
 **Automated enforcement (hook layer):**
 
-Two hooks reinforce this at the tool level, independent of skill behavior:
+Hooks reinforce these rules at the tool level, independent of skill behavior. They work in two layers.
 
-- `pre-tool-write-scan-phi.py` intercepts every Write, Edit, and MultiEdit call before it reaches disk. If the content contains a PHI pattern (MRN, SSN, DOB, patient ID, NPI, insurance ID), the write is denied. This is a hard enforcement point — the write never executes.
-- `post-tool-bash-scan-secrets.py` intercepts Bash tool output via `additionalContext`. If credentials appear in command output, Claude is warned alongside the raw result. **This is advisory, not enforcement** — PostToolUse hooks cannot suppress results from Claude's context. Claude receives both the raw output and the warning.
+**Blocking layer.** The action does not happen unless you approve it.
 
-`pre-tool-write-scan-phi.py` enforces at the blocking layer. `post-tool-bash-scan-secrets.py` enforces at the advisory layer. Disk writes cannot contain PHI. Tool results that contain credentials reach Claude with a warning attached.
+- PHI scans on file writes (`pre-tool-write-scan-phi.py`) and on Bash commands and the script files they name (`pre-tool-bash-scan-phi.py`). Findings have three levels: deny blocks, ask prompts you, warn adds a message.
+- Path guards that keep writes out of the read only code folder, and an ask before reading a file on the sensitive path list.
+- A summary and your approval before any Databricks command that returns rows, and your approval before `gh pr create`.
+- Gate checks that block `/{prefix}-arch`, `/{prefix}-dev` and `/{prefix}-qa` until the earlier approval lines exist.
+
+**Advisory layer.** PostToolUse hooks cannot suppress a result, so Claude receives the raw output plus a warning (`post-tool-result-scan-phi.py` for PHI, `post-tool-bash-scan-secrets.py` for credentials).
+
+Disk writes and commands cannot carry PHI past the blocking layer. Tool results that contain PHI or credentials reach Claude with a warning attached. The full list of hooks, what each does and what it does not catch is in the [Hook Reference](hooks.md).
 
 ---
 

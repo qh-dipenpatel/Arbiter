@@ -1,64 +1,69 @@
 ---
 doc_type: module
-catalog_type: code_doc   # ticket | reference | knowledge | session | code_doc
-doc_role: module         # module | config | test | notebook | sql | pipeline | script | terraform | shell | dockerfile | index
-indexable: true          # false for conversation and trajectory doc_types
-indexed: null            # machine-stamped by indexer; never fill manually
+catalog_type: code_doc
+doc_role: module
+indexable: true
+indexed: null
 repo: "Arbiter"
-source_file: "hooks/pre-tool-bash-guard-code-dir.py"    # relative path from repo root, e.g., engine/core/assembler.py
-status: ACTIVE | ARCHIVED
-last_updated: 2026-11-01
-scores: []         # list of: {model, system, score, scored_on}
-                   # model: dedup key. Same model replaces, new model appends.
-                   # system: local_llm | local_eval | frontier
-                   # score: 0.0-1.0, scored_on: YYYY-MM-DD
-language: ""       # e.g., python
-imports: []        # modules this file imports, relative paths
-exports: []        # functions, classes, or constants this file exposes
-tags: []
+source_file: "hooks/pre-tool-bash-guard-code-dir.py"
+status: ACTIVE
+last_updated: 2026-11-06
+scores: []
+language: "python"
+imports: [json, os, shlex, sys]
+exports: [violates, segment_violates, tokenize, split_segments, command_words, redirect_hits, args_hit, destination_hit, sed_in_place, git_writes, next_cwd, inside, deny, main]
+tags: [guard, hooks, bash, pre-tool, code-dir]
 links: []
-# classifier:        # machine-authored by post-write hooks; never fill manually
-#   stakes: ""       # high | medium | low | none
-#   verified_at: ""  # YYYY-MM-DD
-#   staleness_score: 0.0
-#   integrity_pass: true
-#   voice_pass: true
 ---
 
 ## Purpose
 
-[One paragraph. What this module does and why it exists. No behavior claims without {src:} tags.]
+A PreToolUse hook for Bash. It denies a command that writes into the read-only code directory named by `ARBITER_CODE_DIR`. {src:hooks/pre-tool-bash-guard-code-dir.py:5} It is the Bash side of a pair. The Write, Edit and MultiEdit side is [pre-tool-write-guard-path](pre-tool-write-guard-path.md). {src:hooks/pre-tool-write-guard-path.sh:6}
 
 ## Dependencies
 
-[What this module imports and depends on.
-Vault copy: [[module-name]]. Repo /docs/ copy: [module-name](../path/module-name.md).]
+Standard library only: `json`, `os`, `shlex`, `sys`. {src:hooks/pre-tool-bash-guard-code-dir.py:30-33} It reads the environment variable `ARBITER_CODE_DIR` and the PreToolUse JSON on stdin (`tool_input.command` and `cwd`). {src:hooks/pre-tool-bash-guard-code-dir.py:main} Tests: [test_guard_hooks](../tests/hooks/test_guard_hooks.md).
 
 ## Behavior
 
-[Functional description of the module public interface. Factual claims carry inline citation tags immediately after the claim.
+**Switched off when unset.** If `ARBITER_CODE_DIR` is empty the hook exits 0 with no output. {src:hooks/pre-tool-bash-guard-code-dir.py:178-180} It stays silent because the write guard prints the warning. {src:hooks/pre-tool-bash-guard-code-dir.py:24}
 
-Tag reference (Decision 6):
-  {src:path/to/file.py:42}                        cited, not yet frontier-verified
-  {src:path/to/file.py:42, verified:model-name}   frontier-confirmed, model-name matches scores[].model
-  {src:git:abc1234}                                behavior confirmed via commit
-  {src:docs:name-or-url}                           external reference (RFC, library doc)
-  {unverified}                                     source not reachable during generation
+**Fails open.** Any exception, including bad input, ends in exit 0, so Bash stays usable if the hook breaks. {src:hooks/pre-tool-bash-guard-code-dir.py:189-193}
 
-Requires citation: behavior assertions, data flow, dependency calls, error conditions, return values.
-Does not require: general purpose explanation, structural observation, naming rationale.]
+**Preparing the command.** The code directory is resolved with `realpath`. The text `$ARBITER_CODE_DIR` and `${ARBITER_CODE_DIR}` in the command is replaced by that path. {src:hooks/pre-tool-bash-guard-code-dir.py:185-186} The command is tokenized with `shlex`, falling back to a plain whitespace split if the quotes are unbalanced. {src:hooks/pre-tool-bash-guard-code-dir.py:tokenize} It is split into segments at `;`, `&` and `|`. {src:hooks/pre-tool-bash-guard-code-dir.py:split_segments}
+
+**Path test.** A path counts as inside when, after `~` expansion and resolving relative paths against the tracked working directory, its `realpath` equals the code directory or sits below it. A word starting with `-` never counts. {src:hooks/pre-tool-bash-guard-code-dir.py:inside}
+
+**Per segment, a violation is any of these.**
+
+| Case | Rule |
+|---|---|
+| Output redirect (`>`, `>>`, `&>`) | the next word is inside {src:hooks/pre-tool-bash-guard-code-dir.py:redirect_hits} |
+| `rm`, `mv`, `touch`, `tee`, `mkdir`, `rmdir`, `truncate`, `dd`, `chmod`, `chown` | any argument is inside {src:hooks/pre-tool-bash-guard-code-dir.py:WRITE_VERBS} |
+| `sed` with `-i`, a flag group holding `i`, or `--in-place` | any argument is inside {src:hooks/pre-tool-bash-guard-code-dir.py:sed_in_place} |
+| `cp`, `install`, `ln` | the last argument, or a `-t` or `--target-directory` value, is inside. Sources may be read. {src:hooks/pre-tool-bash-guard-code-dir.py:destination_hit} |
+| `git` | the target is inside (a path argument, `-C`, or the working directory) and the subcommand is not on the read only list {src:hooks/pre-tool-bash-guard-code-dir.py:git_writes} |
+
+The read only git list is `status`, `log`, `diff`, `show`, `ls-files`, `ls-tree`, `rev-parse`, `blame`, `grep`, `describe`, `cat-file`, `shortlog`, `remote`, `config`, `version`, `help`. {src:hooks/pre-tool-bash-guard-code-dir.py:GIT_READ_ONLY} A leading `VAR=value` word or a wrapper (`sudo`, `command`, `env`, `time`, `nice`, `nohup`, `exec`) is skipped before the verb is read. {src:hooks/pre-tool-bash-guard-code-dir.py:command_words}
+
+**Working directory tracking.** After each segment, a `cd` or `pushd` with a target moves the tracked directory for later segments. {src:hooks/pre-tool-bash-guard-code-dir.py:next_cwd}
+
+**Deny output.** A violation prints a deny with a fixed reason and exits 0. {src:hooks/pre-tool-bash-guard-code-dir.py:deny}
 
 ## Diagram: module level (L2, required)
 
 ```mermaid
 flowchart TD
-  %% L2 Container. Max 10 nodes. Real module, function, and dependency names.
+  A["Read command"] --> B{"Directory set?"}
+  B -- no --> C["Allow silently"]
+  B -- yes --> D["Split into segments"]
+  D --> E{"Writes inside?"}
+  E -- yes --> F["Deny command"]
+  E -- no --> G["Allow"]
 ```
-
-## Diagram: function level (L3, optional)
-
-<!-- Fire when a function has decision gates, branching, or internal data paths not obvious from the signature. Skip for straight-line functions. Max 12 nodes. flowchart TD. -->
 
 ## Notes
 
-[Edge cases, known limitations, maintenance notes.]
+Not caught, per the source header: paths built from other variables expanded later, command substitution, obfuscated or encoded paths, scripts that write there internally, interpreters writing through code (`python -c`, `perl -e`), symlinks created after the check, and tools that take the target from a config file. {src:hooks/pre-tool-bash-guard-code-dir.py:19-23}
+
+The matching is conservative text matching on the command, not a sandbox. {src:hooks/pre-tool-bash-guard-code-dir.py:15-19}
